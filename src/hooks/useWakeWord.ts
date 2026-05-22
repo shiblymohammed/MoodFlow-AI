@@ -5,18 +5,26 @@ import { useAppStore } from '@/store/useAppStore';
 const WS_URL = 'ws://127.0.0.1:8765';
 const RECONNECT_DELAY_MS = 3000;
 
+interface EmotionFeatures {
+  emotion: string;
+  confidence: number;
+  pitch_hz: number;
+  energy_rms: number;
+}
+
 interface WakeWordEvent {
   type: 'WAKE_WORD_DETECTED';
   model: string;
   score: number;
   timestamp: number;
+  emotion?: EmotionFeatures;
 }
 
 /**
  * Connects to the Python OpenWakeWord WebSocket sidecar.
  * Uses a stable ref for the onDetected callback to avoid reconnection loops.
  */
-export function useWakeWord(onDetected: () => void) {
+export function useWakeWord(onDetected: (emotion?: EmotionFeatures) => void) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeRef = useRef(true);
@@ -39,7 +47,7 @@ export function useWakeWord(onDetected: () => void) {
   const resumeMic = useCallback(() => sendCommand('RESUME_MIC'), [sendCommand]);
 
   // connect is stable — no deps that change
-  const connectRef = useRef<() => void>();
+  const connectRef = useRef<(() => void) | undefined>(undefined);
   connectRef.current = () => {
     if (!activeRef.current) return;
 
@@ -56,8 +64,8 @@ export function useWakeWord(onDetected: () => void) {
         try {
           const data = JSON.parse(event.data as string) as WakeWordEvent;
           if (data.type === 'WAKE_WORD_DETECTED') {
-            console.log(`[WakeWord] Detected! model=${data.model} score=${data.score}`);
-            onDetectedRef.current();
+            console.log(`[WakeWord] Detected! model=${data.model} score=${data.score} emotion=${data.emotion?.emotion}`);
+            onDetectedRef.current(data.emotion);
           }
         } catch {
           // ignore parse errors

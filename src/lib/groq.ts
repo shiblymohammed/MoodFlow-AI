@@ -51,15 +51,21 @@ export interface MoodObject {
 
 export async function extractMood(
   userInput: string,
-  conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
+  conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
+  contextPrefix = ''    // injected by useContextSignals
 ): Promise<MoodObject> {
+  // Prepend context so the LLM understands time/weather/device without user saying it
+  const enrichedInput = contextPrefix
+    ? `[Context: ${contextPrefix}]\n\nUser says: ${userInput}`
+    : userInput;
+
   const messages: Groq.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: MOOD_SYSTEM_PROMPT },
     ...conversationHistory.map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     })),
-    { role: 'user', content: userInput },
+    { role: 'user', content: enrichedInput },
   ];
 
   const completion = await groqClient.chat.completions.create({

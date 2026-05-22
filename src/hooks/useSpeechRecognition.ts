@@ -2,12 +2,7 @@
 import { useCallback, useRef } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 
-// Augment Window for webkit prefix
-declare global {
-  interface Window {
-    webkitSpeechRecognition: typeof globalThis.SpeechRecognition;
-  }
-}
+
 
 export function useSpeechRecognition() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);

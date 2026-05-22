@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
 MoodFlow AI — OpenWakeWord Sidecar
-Listens for the wake word and notifies the Next.js frontend via WebSocket.
-Supports PAUSE_MIC / RESUME_MIC commands from the browser to avoid mic conflicts.
+Listens for wake word, analyzes voice emotion, notifies Next.js via WebSocket.
+Supports PAUSE_MIC / RESUME_MIC commands from the browser.
 """
 
 import asyncio
 import json
 import logging
 import time
+from collections import deque
 from typing import Set
 
 import numpy as np
 import pyaudio
 import websockets
 from openwakeword.model import Model
+from emotion_analyzer import analyze_audio_chunk
 
 # ── Config ──────────────────────────────────────────────────────────────────
 WS_HOST = "127.0.0.1"
@@ -24,9 +26,13 @@ DETECTION_THRESHOLD = 0.5
 COOLDOWN_SECONDS = 3.0
 
 SAMPLE_RATE = 16000
-CHUNK_SIZE = 1280
+CHUNK_SIZE = 1280              # ~80ms per chunk
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
+
+# Pre-wake audio buffer: keep last ~2 seconds for emotion analysis
+PRE_WAKE_SECONDS = 2.0
+PRE_WAKE_CHUNKS = int(PRE_WAKE_SECONDS * SAMPLE_RATE / CHUNK_SIZE)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,11 +43,10 @@ log = logging.getLogger("moodflow-wakeword")
 
 # ── Shared state ─────────────────────────────────────────────────────────────
 connected_clients: Set[websockets.ServerConnection] = set()
-mic_paused = False          # when True, skip inference (browser STT is active)
+mic_paused = False
 
 
 async def ws_handler(websocket: websockets.ServerConnection) -> None:
-    """Accept, track, and handle commands from browser clients."""
     global mic_paused
     connected_clients.add(websocket)
     log.info(f"Browser connected ({len(connected_clients)} client(s))")
@@ -76,7 +81,6 @@ async def broadcast(event: dict) -> None:
 
 
 def run_detection(loop: asyncio.AbstractEventLoop) -> None:
-    """Blocking mic + inference loop — runs in a thread."""
     global mic_paused
     log.info(f"Loading model: {WAKE_WORD_MODEL} …")
     oww = Model(wakeword_models=[WAKE_WORD_MODEL], inference_framework="onnx")
@@ -92,16 +96,21 @@ def run_detection(loop: asyncio.AbstractEventLoop) -> None:
     )
 
     log.info(f'🎙️  Listening for "{WAKE_WORD_MODEL}"…  (threshold={DETECTION_THRESHOLD})')
+
+    # Rolling buffer of raw PCM bytes for pre-wake emotion analysis
+    pre_wake_buffer: deque[bytes] = deque(maxlen=PRE_WAKE_CHUNKS)
     last_detection = 0.0
 
     try:
         while True:
             raw = stream.read(CHUNK_SIZE, exception_on_overflow=False)
 
-            # Skip inference when browser STT is using the mic
             if mic_paused:
                 time.sleep(0.05)
                 continue
+
+            # Always fill the pre-wake buffer
+            pre_wake_buffer.append(raw)
 
             audio = np.frombuffer(raw, dtype=np.int16)
             prediction = oww.predict(audio)
@@ -111,12 +120,23 @@ def run_detection(loop: asyncio.AbstractEventLoop) -> None:
                 if score >= DETECTION_THRESHOLD and (now - last_detection) > COOLDOWN_SECONDS:
                     last_detection = now
                     log.info(f"🔔 DETECTED! model={model_name} score={score:.3f}")
+
+                    # Analyze emotion from pre-wake audio in a thread-safe way
+                    pre_wake_pcm = b"".join(pre_wake_buffer)
+                    emotion_features = analyze_audio_chunk(pre_wake_pcm, SAMPLE_RATE)
+                    log.info(
+                        f"🎭 Emotion: {emotion_features['emotion']} "
+                        f"(confidence={emotion_features['confidence']:.2f}, "
+                        f"pitch={emotion_features['pitch_hz']}Hz)"
+                    )
+
                     asyncio.run_coroutine_threadsafe(
                         broadcast({
-                            "type": "WAKE_WORD_DETECTED",
-                            "model": model_name,
-                            "score": round(float(score), 3),
+                            "type":      "WAKE_WORD_DETECTED",
+                            "model":     model_name,
+                            "score":     round(float(score), 3),
                             "timestamp": now,
+                            "emotion":   emotion_features,  # ← Phase 3a addition
                         }),
                         loop,
                     )

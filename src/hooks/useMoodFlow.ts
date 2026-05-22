@@ -2,12 +2,13 @@
 import { useCallback } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useSpeechRecognition } from './useSpeechRecognition';
+import { useContextSignals } from './useContextSignals';
+import { classifyIntent, intentLabel } from '@/lib/intent-classifier';
 import type { MoodObject } from '@/lib/groq';
 import type { SpotifyTrack } from '@/lib/spotify';
 
 export function useMoodFlow() {
   const {
-    accessToken,
     setListeningState,
     setCurrentMood,
     setPlaylistName,
@@ -18,12 +19,146 @@ export function useMoodFlow() {
   } = useAppStore();
 
   const { startListening, isSupported } = useSpeechRecognition();
+  const { contextString, timeHint } = useContextSignals();
 
+  // ── Playback control (next / pause / play / previous / stop / volume) ────
+  const handlePlaybackControl = useCallback(async (
+    action: string,
+    userInput: string,
+  ) => {
+    setListeningState('processing');
+
+    // Echo user command in conversation
+    addConversationEntry({
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: userInput,
+      timestamp: Date.now(),
+    });
+
+    const { deviceId } = useAppStore.getState();
+
+    try {
+      // Map 'stop' → 'pause' for Spotify API (stop = pause for SDK player)
+      const spotifyAction = action === 'stop' ? 'pause' : action;
+
+      const res = await fetch('/api/spotify/playback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: spotifyAction, deviceId }),
+      });
+
+      const actionEmoji: Record<string, string> = {
+        next: '⏭', pause: '⏸', play: '▶️', previous: '⏮', stop: '⏹',
+      };
+
+      if (res.ok) {
+        const emoji = actionEmoji[action] ?? '✓';
+        addConversationEntry({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `${emoji} Got it!`,
+          timestamp: Date.now(),
+        });
+        // After next/previous, let Spotify update — stay in 'playing' state
+        setListeningState(action === 'pause' || action === 'stop' ? 'idle' : 'playing');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `Playback control failed (${res.status})`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Playback control failed');
+      setListeningState('idle');
+    }
+  }, [setListeningState, setError, addConversationEntry]);
+
+  // ── Volume control ─────────────────────────────────────────────────────────
+  const handleVolume = useCallback(async (level: 'up' | 'down' | number, userInput: string) => {
+    addConversationEntry({
+      id: crypto.randomUUID(), role: 'user', content: userInput, timestamp: Date.now(),
+    });
+
+    const { volume, deviceId } = useAppStore.getState();
+    let newVolume: number;
+    if (level === 'up')        newVolume = Math.min(volume + 15, 100);
+    else if (level === 'down') newVolume = Math.max(volume - 15, 0);
+    else                       newVolume = level;
+
+    await fetch('/api/spotify/playback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'volume', volume: newVolume, deviceId }),
+    });
+
+    addConversationEntry({
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: `🔊 Volume set to ${newVolume}%`,
+      timestamp: Date.now(),
+    });
+  }, [addConversationEntry]);
+
+  // ── Handle specific song request ────────────────────────────────────────────────
+  const handleSpecificSong = useCallback(async (query: string, userInput: string) => {
+    setListeningState('processing');
+    addConversationEntry({
+      id: crypto.randomUUID(), role: 'user', content: userInput, timestamp: Date.now(),
+    });
+
+    try {
+      // Direct Spotify search — no Groq needed
+      const res = await fetch(`/api/spotify/search-track?q=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error('Track search failed');
+
+      const { track }: { track: SpotifyTrack | null } = await res.json();
+      if (!track) {
+        addConversationEntry({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `🔍 Couldn’t find “${query}” on Spotify. Try a different name?`,
+          timestamp: Date.now(),
+        });
+        setListeningState('idle');
+        return;
+      }
+
+      // Play just this one track
+      setQueue([track]);
+      const { deviceId } = useAppStore.getState();
+      const playRes = await fetch('/api/spotify/playback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'queue',
+          deviceId: deviceId ?? undefined,
+          trackUris: [track.uri],
+        }),
+      });
+
+      if (!playRes.ok) {
+        const err = await playRes.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Playback failed');
+      }
+
+      addConversationEntry({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `▶️ Now playing **${track.name}** by ${track.artists.map(a => a.name).join(', ')}`,
+        timestamp: Date.now(),
+        tracks: [track],
+      });
+      setListeningState('playing');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not play that song');
+      setListeningState('idle');
+    }
+  }, [setListeningState, setError, setQueue, addConversationEntry]);
+
+  // ── Full mood pipeline (search + play) ────────────────────────────────────
   const runPipeline = useCallback(async (userInput: string) => {
     try {
       setListeningState('processing');
 
-      // Add user message to conversation
       addConversationEntry({
         id: crypto.randomUUID(),
         role: 'user',
@@ -31,17 +166,17 @@ export function useMoodFlow() {
         timestamp: Date.now(),
       });
 
-      // Build conversation history for context
       const history = conversation.slice(-6).map(e => ({
         role: e.role,
         content: e.content,
       }));
 
-      // 1. Extract mood with Groq
+      // 1. Extract mood with Groq — includes time/weather/device/emotion context
+      const contextPrefix = [contextString, timeHint].filter(Boolean).join(' ');
       const moodRes = await fetch('/api/ai/mood-analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: userInput, history }),
+        body: JSON.stringify({ input: userInput, history, contextPrefix }),
       });
       if (!moodRes.ok) throw new Error('Mood analysis failed');
       const { mood }: { mood: MoodObject } = await moodRes.json();
@@ -68,16 +203,14 @@ export function useMoodFlow() {
       console.log('[MoodFlow] deviceId:', deviceId, '| tracks.length:', tracks.length);
 
       if (tracks.length > 0) {
-        // Transfer playback to the web player first (ensures our SDK device is active)
         if (deviceId) {
           await fetch('/api/spotify/playback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'transfer', deviceId }),
-          }).catch(() => null); // non-fatal
+          }).catch(() => null);
         }
 
-        // Small delay so the transfer settles before queueing
         await new Promise(r => setTimeout(r, 400));
 
         const playRes = await fetch('/api/spotify/playback', {
@@ -95,11 +228,10 @@ export function useMoodFlow() {
           const msg = errData.error ?? `Playback failed (${playRes.status})`;
           console.error('[MoodFlow] Playback error:', msg, errData);
           setError(`🎵 Playback error: ${msg}`);
-          // Don't throw — let conversation update still happen
         }
       }
 
-      // 4. Add AI reply to conversation
+      // 4. Add AI reply
       const aiMessage = `Playing **${playlistName}** — ${mood.follow_up_context}`;
       addConversationEntry({
         id: crypto.randomUUID(),
@@ -117,27 +249,49 @@ export function useMoodFlow() {
       setListeningState('idle');
     }
   }, [
-    accessToken, conversation,
+    conversation, contextString, timeHint,
     setListeningState, setCurrentMood, setPlaylistName,
     setQueue, setError, addConversationEntry,
   ]);
 
+  // ── Main entry point — classify intent then route ─────────────────────────
   const startVoiceSession = useCallback(async () => {
-    // Prevent double-trigger
     const { listeningState } = useAppStore.getState();
     if (listeningState === 'listening' || listeningState === 'processing') return;
 
     setError(null);
     try {
       const transcript = await startListening();
-      if (transcript.trim()) {
-        await runPipeline(transcript.trim());
-      } else {
-        setListeningState('idle');
+      const text = transcript.trim();
+      if (!text) { setListeningState('idle'); return; }
+
+      const intent = classifyIntent(text);
+      console.log('[MoodFlow] Intent:', intentLabel(intent), '←', text);
+
+      switch (intent.type) {
+        case 'playback_control':
+          await handlePlaybackControl(intent.action, text);
+          break;
+
+        case 'volume':
+          await handleVolume(intent.level, text);
+          break;
+
+        case 'specific_song':
+          await handleSpecificSong(intent.query, text);
+          break;
+
+        case 'mood_change':
+          await runPipeline(`Change the mood. ${intent.hint}`);
+          break;
+
+        case 'mood_request':
+        default:
+          await runPipeline(text);
+          break;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not hear you';
-      // "aborted" is non-fatal — user just needs to try again
       if (msg.includes('aborted') || msg.includes('no-speech')) {
         setListeningState('idle');
       } else {
@@ -145,7 +299,7 @@ export function useMoodFlow() {
         setListeningState('idle');
       }
     }
-  }, [startListening, runPipeline, setError, setListeningState]);
+  }, [startListening, runPipeline, handlePlaybackControl, handleVolume, handleSpecificSong, setError, setListeningState]);
 
   return { startVoiceSession, runPipeline, isSupported };
 }

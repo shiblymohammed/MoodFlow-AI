@@ -43,6 +43,8 @@ export interface AppState {
   setCurrentMood: (mood: MoodObject | null) => void;
   playlistName: string;
   setPlaylistName: (name: string) => void;
+  detectedEmotion: { emotion: string; confidence: number; pitch_hz: number; energy_rms: number } | null;
+  setDetectedEmotion: (e: { emotion: string; confidence: number; pitch_hz: number; energy_rms: number } | null) => void;
 
   // Conversation
   conversation: ConversationEntry[];
@@ -84,6 +86,8 @@ export const useAppStore = create<AppState>((set) => ({
   setCurrentMood: (mood) => set({ currentMood: mood }),
   playlistName: '',
   setPlaylistName: (name) => set({ playlistName: name }),
+  detectedEmotion: null,
+  setDetectedEmotion: (e) => set({ detectedEmotion: e }),
 
   // Conversation
   conversation: [],

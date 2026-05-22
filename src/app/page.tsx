@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useMoodFlow } from '@/hooks/useMoodFlow';
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer';
 import { useWakeWord } from '@/hooks/useWakeWord';
+import { useContextSignals } from '@/hooks/useContextSignals';
 import { VoiceOrb } from '@/components/VoiceOrb/VoiceOrb';
 import { NowPlaying } from '@/components/NowPlaying/NowPlaying';
 import { PlaybackControls } from '@/components/PlaybackControls/PlaybackControls';
@@ -52,16 +53,21 @@ function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
 }
 
 export default function HomePage() {
-  const { accessToken, error, setError, setAccessToken, deviceId } = useAppStore();
+  const { accessToken, error, setError, setAccessToken, deviceId, detectedEmotion, setDetectedEmotion } = useAppStore();
   const { startVoiceSession, runPipeline, isSupported } = useMoodFlow();
 
   // Initialize Spotify player when authed
   useSpotifyPlayer();
 
+  // Context signals: time, weather, device — auto-injected into Groq via useMoodFlow
+  const { weatherData } = useContextSignals();
+
   // Connect to Python OpenWakeWord sidecar — auto-triggers voice session on detection
   // pauseMic/resumeMic tell Python to yield the mic to the browser's Web Speech API
   const { isConnected: wakeWordConnected, pauseMic, resumeMic } = useWakeWord(
-    async () => {
+    async (emotion) => {
+      // Store detected emotion for context injection
+      if (emotion) setDetectedEmotion(emotion);
       pauseMic();
       try {
         await startVoiceSession();
@@ -109,6 +115,19 @@ export default function HomePage() {
           </span>
         </div>
         <div className={styles.headerActions}>
+          {/* Weather pill */}
+          {weatherData && (
+            <div
+              className={styles.wakeWordStatus}
+              title={`${weatherData.label}, ${weatherData.temperatureCelsius}°C — used to personalise your music`}
+            >
+              <span>{weatherData.emoji}</span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                {weatherData.temperatureCelsius}°C
+              </span>
+            </div>
+          )}
+
           {/* SDK device status */}
           <div
             className={styles.wakeWordStatus}
@@ -127,6 +146,25 @@ export default function HomePage() {
               {wakeWordConnected ? 'Hey Jarvis' : 'Wake word off'}
             </span>
           </div>
+
+          {/* Emotion pill — shown after wake word detects voice tone */}
+          {detectedEmotion && detectedEmotion.emotion !== 'neutral' && (
+            <div
+              className={styles.wakeWordStatus}
+              title={`Voice emotion: ${detectedEmotion.emotion} (${Math.round(detectedEmotion.confidence * 100)}% confidence) — influences music selection`}
+            >
+              <span>{
+                detectedEmotion.emotion === 'excited'  ? '⚡' :
+                detectedEmotion.emotion === 'stressed' ? '😤' :
+                detectedEmotion.emotion === 'sad'      ? '😢' :
+                detectedEmotion.emotion === 'focused'  ? '🎯' :
+                detectedEmotion.emotion === 'sleepy'   ? '😴' : '🎭'
+              }</span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'capitalize' }}>
+                {detectedEmotion.emotion}
+              </span>
+            </div>
+          )}
 
           <motion.div className={styles.statusDot}
             animate={{ opacity: [1, 0.4, 1] }}

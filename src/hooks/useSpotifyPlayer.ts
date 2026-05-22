@@ -111,19 +111,22 @@ export function useSpotifyPlayer() {
       });
     });
 
-    player.addListener('initialization_error', ({ message }) => {
+    player.addListener('initialization_error', (data: unknown) => {
+      const { message } = data as { message: string };
       console.error('[Spotify SDK] Init error:', message);
       setError(`Spotify player init failed: ${message}`);
-      initializedRef.current = false; // allow retry
+      initializedRef.current = false;
     });
 
-    player.addListener('authentication_error', ({ message }) => {
+    player.addListener('authentication_error', (data: unknown) => {
+      const { message } = data as { message: string };
       console.error('[Spotify SDK] Auth error:', message);
       setError(`Spotify auth error: ${message}`);
       initializedRef.current = false;
     });
 
-    player.addListener('account_error', ({ message }) => {
+    player.addListener('account_error', (data: unknown) => {
+      const { message } = data as { message: string };
       console.error('[Spotify SDK] Account error:', message);
       setError('Spotify Premium required for playback.');
       initializedRef.current = false;
