@@ -1,0 +1,138 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Main button */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(239, 68, 68, 0.12) 50%, rgba(139, 92, 246, 0.15) 100%);
+  background-clip: padding-box;
+  position: relative;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  transition: all 0.25s var(--ease-smooth);
+  overflow: hidden;
+}
+
+/* Animated border gradient */
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444, #8b5cf6, #06b6d4, #f59e0b);
+  background-size: 300% 300%;
+  animation: borderSpin 3s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.6;
+}
+
+@keyframes borderSpin {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 30px rgba(245, 158, 11, 0.25),
+    0 0 60px rgba(139, 92, 246, 0.15);
+}
+
+.btn:hover::before {
+  opacity: 1;
+}
+
+/* Spinning state */
+.spinning {
+  cursor: not-allowed;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(239, 68, 68, 0.18) 50%, rgba(139, 92, 246, 0.2) 100%);
+}
+
+.spinning::before {
+  opacity: 1;
+  animation: borderSpin 0.5s linear infinite;
+}
+
+/* Picked state */
+.picked {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(239, 68, 68, 0.2) 100%);
+  box-shadow:
+    0 0 40px rgba(245, 158, 11, 0.3),
+    0 0 80px rgba(239, 68, 68, 0.15);
+}
+
+.picked::before {
+  opacity: 1;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+}
+
+/* Dice emoji */
+.dice {
+  font-size: 1.3rem;
+  display: inline-block;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Labels */
+.label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.pickedLabel {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--amber);
+  letter-spacing: -0.01em;
+}
+
+/* Hint text */
+.hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: center;
+  transition: color 0.2s;
+}
+
+/* Shimmer overlay during spin */
+.spinning::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+  animation: shimmer 0.8s ease-in-out infinite;
+  border-radius: inherit;
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}

@@ -14,6 +14,7 @@ import { SpotifyLogin } from '@/components/SpotifyLogin/SpotifyLogin';
 import styles from './page.module.css';
 import { SettingsPanel } from '@/components/Settings/SettingsPanel';
 import { FaceDetector } from '@/components/FaceDetector/FaceDetector';
+import { VibeRoulette } from '@/components/VibeRoulette/VibeRoulette';
 import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings } from 'lucide-react';
 
 type MobileTab = 'voice' | 'player' | 'chat';
@@ -249,6 +250,10 @@ export default function HomePage() {
             <p className={styles.noSpeechWarning}>⚠️ Voice not supported. Use text input.</p>
           )}
           <TextInput onSubmit={runPipeline} />
+
+          {/* Vibe Roulette */}
+          <VibeRoulette onVibePicked={runPipeline} />
+
           {/* Mood chips */}
           <div className={styles.chipsGrid}>
             {(language === 'ml' ? MOOD_CHIPS_ML : MOOD_CHIPS_EN).map((ex) => (
@@ -298,6 +303,10 @@ export default function HomePage() {
                 <p className={styles.noSpeechWarning}>⚠️ Voice not supported. Use text input.</p>
               )}
               <TextInput onSubmit={runPipeline} />
+
+              {/* Vibe Roulette */}
+              <VibeRoulette onVibePicked={runPipeline} />
+
               <div className={styles.mobileChips}>
                 {(language === 'ml' ? MOOD_CHIPS_ML : MOOD_CHIPS_EN).map((ex) => (
                   <motion.button
