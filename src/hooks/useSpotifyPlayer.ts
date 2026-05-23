@@ -219,9 +219,58 @@ export function useSpotifyPlayer() {
     };
   }, [accessToken, initPlayer]);
 
-  const togglePlay = useCallback(() => playerRef.current?.togglePlay(), []);
-  const nextTrack = useCallback(() => playerRef.current?.nextTrack(), []);
-  const previousTrack = useCallback(() => playerRef.current?.previousTrack(), []);
+  /**
+   * togglePlay: try SDK first, fall back to REST if SDK state is unavailable.
+   * Fixes intermittent play/pause failures when browser loses focus or SDK drifts.
+   */
+  const togglePlay = useCallback(async () => {
+    const player = playerRef.current;
+    if (player) {
+      try {
+        const state = await player.getCurrentState();
+        if (state !== null) {
+          // SDK knows the state — use it directly
+          await player.togglePlay();
+          return;
+        }
+      } catch {
+        // fall through to REST
+      }
+    }
+    // Fallback: use REST API
+    const { isPlaying, deviceId } = useAppStore.getState();
+    const action = isPlaying ? 'pause' : 'play';
+    fetch('/api/spotify/playback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, deviceId }),
+    }).catch(console.error);
+  }, []);
+
+  const nextTrack = useCallback(async () => {
+    if (playerRef.current) {
+      try { await playerRef.current.nextTrack(); return; } catch { /* fall through */ }
+    }
+    const { deviceId } = useAppStore.getState();
+    fetch('/api/spotify/playback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'next', deviceId }),
+    }).catch(console.error);
+  }, []);
+
+  const previousTrack = useCallback(async () => {
+    if (playerRef.current) {
+      try { await playerRef.current.previousTrack(); return; } catch { /* fall through */ }
+    }
+    const { deviceId } = useAppStore.getState();
+    fetch('/api/spotify/playback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'previous', deviceId }),
+    }).catch(console.error);
+  }, []);
+
   const setPlayerVolume = useCallback((v: number) => playerRef.current?.setVolume(v / 100), []);
 
   return { togglePlay, nextTrack, previousTrack, setPlayerVolume };
