@@ -17,6 +17,8 @@ export function useMoodFlow() {
     setError,
     conversation,
     addConversationEntry,
+    addToSongHistory,
+    addToMoodHistory,
   } = useAppStore();
 
   const { startListening, isSupported } = useSpeechRecognition();
@@ -245,6 +247,26 @@ export function useMoodFlow() {
         tracks: tracks.slice(0, 5),
       });
 
+      // 5. Record mood to history
+      addToMoodHistory({
+        id: crypto.randomUUID(),
+        mood,
+        playlistName,
+        detectedAt: Date.now(),
+        query: userInput,
+      });
+
+      // 6. Record first track to song history
+      if (tracks.length > 0) {
+        addToSongHistory({
+          id: crypto.randomUUID(),
+          track: tracks[0],
+          playedAt: Date.now(),
+          mood,
+          playlistName,
+        });
+      }
+
       // Speak the playlist name via TTS
       speak(`Playing ${playlistName}`);
 
@@ -258,6 +280,7 @@ export function useMoodFlow() {
     conversation, contextString, timeHint,
     setListeningState, setCurrentMood, setPlaylistName,
     setQueue, setError, addConversationEntry,
+    addToMoodHistory, addToSongHistory,
   ]);
 
   // ── More like this ─────────────────────────────────────────────────────────

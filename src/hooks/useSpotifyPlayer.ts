@@ -57,6 +57,7 @@ export function useSpotifyPlayer() {
     setCurrentTrack,
     setIsPlaying,
     setPlaybackPositionMs,
+    addToSongHistory,
     setError,
     volume,
   } = useAppStore();
@@ -98,7 +99,7 @@ export function useSpotifyPlayer() {
       setIsPlaying(!s.paused);
       setPlaybackPositionMs(s.position);
       const ct = s.track_window.current_track;
-      setCurrentTrack({
+      const track = {
         id: ct.id,
         name: ct.name,
         artists: ct.artists.map(a => ({ id: '', name: a.name })),
@@ -111,7 +112,20 @@ export function useSpotifyPlayer() {
         preview_url: null,
         uri: ct.uri,
         external_urls: { spotify: '' },
-      });
+      };
+      setCurrentTrack(track);
+
+      // Record every track change to song history
+      if (!s.paused) {
+        const { currentMood, playlistName } = useAppStore.getState();
+        addToSongHistory({
+          id: crypto.randomUUID(),
+          track,
+          playedAt: Date.now(),
+          mood: currentMood,
+          playlistName,
+        });
+      }
     });
 
     player.addListener('initialization_error', (data: unknown) => {

@@ -13,6 +13,22 @@ export interface ConversationEntry {
   tracks?: SpotifyTrack[];
 }
 
+export interface PlayedEntry {
+  id: string;
+  track: SpotifyTrack;
+  playedAt: number;           // Date.now()
+  mood: MoodObject | null;    // mood active when this track played
+  playlistName: string;
+}
+
+export interface MoodEntry {
+  id: string;
+  mood: MoodObject;
+  playlistName: string;
+  detectedAt: number;         // Date.now()
+  query: string;              // user input that triggered it
+}
+
 export interface AppState {
   // Auth
   accessToken: string | null;
@@ -66,6 +82,14 @@ export interface AppState {
   setWakeWordThreshold: (v: number) => void;
   ttsEnabled: boolean;
   setTtsEnabled: (v: boolean) => void;
+
+  // History
+  songHistory: PlayedEntry[];
+  addToSongHistory: (entry: PlayedEntry) => void;
+  clearSongHistory: () => void;
+  moodHistory: MoodEntry[];
+  addToMoodHistory: (entry: MoodEntry) => void;
+  clearMoodHistory: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -124,4 +148,14 @@ export const useAppStore = create<AppState>((set) => ({
   setWakeWordThreshold: (v) => set({ wakeWordThreshold: v }),
   ttsEnabled: true,
   setTtsEnabled: (v) => set({ ttsEnabled: v }),
+
+  // History
+  songHistory: [],
+  addToSongHistory: (entry) =>
+    set((state) => ({ songHistory: [entry, ...state.songHistory].slice(0, 100) })),
+  clearSongHistory: () => set({ songHistory: [] }),
+  moodHistory: [],
+  addToMoodHistory: (entry) =>
+    set((state) => ({ moodHistory: [entry, ...state.moodHistory].slice(0, 50) })),
+  clearMoodHistory: () => set({ moodHistory: [] }),
 }));

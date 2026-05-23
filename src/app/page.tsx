@@ -17,9 +17,10 @@ import { FaceDetector } from '@/components/FaceDetector/FaceDetector';
 import { VibeRoulette } from '@/components/VibeRoulette/VibeRoulette';
 import { Lyrics } from '@/components/Lyrics/Lyrics';
 import { useBiometrics } from '@/hooks/useBiometrics';
-import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings, Heart } from 'lucide-react';
+import { SessionHistory } from '@/components/SessionHistory/SessionHistory';
+import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings, Heart, History } from 'lucide-react';
 
-type MobileTab = 'voice' | 'player' | 'chat';
+type MobileTab = 'voice' | 'player' | 'chat' | 'history';
 
 function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
   const [value, setValue] = useState('');
@@ -307,6 +308,7 @@ export default function HomePage() {
           <NowPlaying />
           <PlaybackControls />
           <Lyrics />
+          <SessionHistory />
           <ConversationFeed />
         </motion.section>
       </div>
@@ -361,6 +363,7 @@ export default function HomePage() {
             >
               <NowPlaying />
               <PlaybackControls />
+              <Lyrics />
             </motion.div>
           )}
 
@@ -376,6 +379,19 @@ export default function HomePage() {
               <ConversationFeed />
             </motion.div>
           )}
+
+          {activeTab === 'history' && (
+            <motion.div
+              key="history"
+              className={styles.mobileTab}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <SessionHistory />
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -383,9 +399,10 @@ export default function HomePage() {
       <nav className={styles.bottomNav} aria-label="App navigation">
         {(
           [
-            { id: 'voice',  label: 'Voice',  Icon: Mic },
-            { id: 'player', label: 'Player', Icon: Music2 },
-            { id: 'chat',   label: 'Chat',   Icon: MessageCircle },
+            { id: 'voice',   label: 'Voice',   Icon: Mic },
+            { id: 'player',  label: 'Player',  Icon: Music2 },
+            { id: 'chat',    label: 'Chat',    Icon: MessageCircle },
+            { id: 'history', label: 'History', Icon: History },
           ] as { id: MobileTab; label: string; Icon: React.ElementType }[]
         ).map(({ id, label, Icon }) => (
           <motion.button
