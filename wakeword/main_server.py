@@ -33,7 +33,7 @@ DETECTION_THRESHOLD = 0.5
 COOLDOWN_SECONDS   = 3.0
 
 SAMPLE_RATE        = 16000
-CHUNK_SAMPLES      = 1280          # Int16 samples per chunk (matches browser)
+CHUNK_SAMPLES      = 2048          # Int16 samples per chunk (power-of-2, matches browser ScriptProcessor)
 
 # Keep ~2s of audio for emotion analysis
 PRE_WAKE_CHUNKS    = int(2.0 * SAMPLE_RATE / CHUNK_SAMPLES)

@@ -8,7 +8,7 @@ const WS_URL =
 
 const RECONNECT_DELAY_MS = 3000;
 // PCM chunk size sent to VPS (matches openWakeWord's expected frame size)
-const CHUNK_SAMPLES = 1280;   // 80ms @ 16kHz
+const CHUNK_SAMPLES = 2048;   // must be power-of-2 for createScriptProcessor (≈128ms @ 16kHz)
 const SAMPLE_RATE   = 16000;
 
 interface EmotionFeatures {
@@ -86,7 +86,8 @@ export function useWakeWord(onDetected: (emotion?: EmotionFeatures) => void) {
       const source    = ctx.createMediaStreamSource(stream);
       // ScriptProcessor is deprecated but still the most compatible way
       // to get raw PCM chunks without an AudioWorklet module file
-      const processor = ctx.createScriptProcessor(CHUNK_SAMPLES, 1, 1);
+      // Buffer size MUST be a power of 2 (256–16384); 2048 ≈ 128ms @ 16kHz
+      const processor = ctx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
 
       processor.onaudioprocess = (e) => {
