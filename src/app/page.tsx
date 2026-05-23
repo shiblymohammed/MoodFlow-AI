@@ -12,7 +12,8 @@ import { PlaybackControls } from '@/components/PlaybackControls/PlaybackControls
 import { ConversationFeed } from '@/components/ConversationFeed/ConversationFeed';
 import { SpotifyLogin } from '@/components/SpotifyLogin/SpotifyLogin';
 import styles from './page.module.css';
-import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages } from 'lucide-react';
+import { SettingsPanel } from '@/components/Settings/SettingsPanel';
+import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings } from 'lucide-react';
 
 type MobileTab = 'voice' | 'player' | 'chat';
 
@@ -76,6 +77,7 @@ export default function HomePage() {
   const { accessToken, error, setError, setAccessToken, deviceId, detectedEmotion, setDetectedEmotion, language, setLanguage } = useAppStore();
   const { startVoiceSession, runPipeline, isSupported } = useMoodFlow();
   const [activeTab, setActiveTab] = useState<MobileTab>('voice');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useSpotifyPlayer();
   const { weatherData } = useContextSignals();
@@ -178,6 +180,18 @@ export default function HomePage() {
           >
             <Languages size={13} />
             <span>{language === 'ml' ? 'മല' : 'EN'}</span>
+          </motion.button>
+
+          {/* Settings gear */}
+          <motion.button
+            id="settings-btn"
+            className={styles.iconBtn}
+            onClick={() => setSettingsOpen(true)}
+            whileTap={{ scale: 0.9 }}
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <Settings size={16} />
           </motion.button>
 
           {/* SDK dot */}
@@ -352,6 +366,9 @@ export default function HomePage() {
           </motion.button>
         ))}
       </nav>
+
+      {/* Settings panel */}
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </main>
   );
 }

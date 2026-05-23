@@ -58,6 +58,12 @@ export interface AppState {
   // Language
   language: 'en' | 'ml';
   setLanguage: (lang: 'en' | 'ml') => void;
+
+  // Settings
+  wakeWordThreshold: number;
+  setWakeWordThreshold: (v: number) => void;
+  ttsEnabled: boolean;
+  setTtsEnabled: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -108,4 +114,10 @@ export const useAppStore = create<AppState>((set) => ({
   // Language
   language: 'en',
   setLanguage: (lang) => set({ language: lang }),
+
+  // Settings
+  wakeWordThreshold: 0.5,
+  setWakeWordThreshold: (v) => set({ wakeWordThreshold: v }),
+  ttsEnabled: true,
+  setTtsEnabled: (v) => set({ ttsEnabled: v }),
 }));

@@ -61,6 +61,7 @@ async def handle_client(websocket: websockets.ServerConnection) -> None:
     pre_buffer: deque[bytes] = deque(maxlen=PRE_WAKE_CHUNKS)
     last_detection = 0.0
     paused = False
+    threshold = DETECTION_THRESHOLD  # per-client, adjustable via SET_THRESHOLD
 
     try:
         async for message in websocket:
@@ -79,7 +80,7 @@ async def handle_client(websocket: websockets.ServerConnection) -> None:
 
                 now = time.time()
                 for model_name, score in predictions.items():
-                    if score >= DETECTION_THRESHOLD and (now - last_detection) > COOLDOWN_SECONDS:
+                    if score >= threshold and (now - last_detection) > COOLDOWN_SECONDS:
                         last_detection = now
                         log.info(f"🔔 DETECTED! model={model_name} score={score:.3f} client={client_addr}")
 
@@ -101,16 +102,22 @@ async def handle_client(websocket: websockets.ServerConnection) -> None:
                             "emotion":   emotion_data,
                         }))
 
-            # ── Text: control commands (PAUSE_MIC / RESUME_MIC) ──
+            # ── Text: control commands ──
             elif isinstance(message, str):
                 try:
-                    cmd = json.loads(message).get("type", "")
+                    msg = json.loads(message)
+                    cmd = msg.get("type", "")
                     if cmd == "PAUSE_MIC":
                         paused = True
                         log.info(f"🔇 Mic paused for {client_addr}")
                     elif cmd == "RESUME_MIC":
                         paused = False
                         log.info(f"🎙️  Mic resumed for {client_addr}")
+                    elif cmd == "SET_THRESHOLD":
+                        new_val = float(msg.get("value", DETECTION_THRESHOLD))
+                        new_val = max(0.1, min(0.99, new_val))  # clamp to safe range
+                        threshold = new_val
+                        log.info(f"🎚️  Threshold updated → {threshold:.2f} for {client_addr}")
                 except Exception:
                     pass
 

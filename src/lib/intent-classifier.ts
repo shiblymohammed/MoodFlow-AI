@@ -13,9 +13,11 @@ export type PlaybackAction = 'next' | 'pause' | 'play' | 'previous' | 'stop';
 export type VoiceIntent =
   | { type: 'playback_control'; action: PlaybackAction }
   | { type: 'volume';           level: 'up' | 'down' | number }
-  | { type: 'specific_song';   query: string }   // exact song/artist search
-  | { type: 'mood_change';     hint: string }     // re-run pipeline with user hint
-  | { type: 'mood_request' }                      // full AI pipeline
+  | { type: 'specific_song';   query: string }
+  | { type: 'more_like_this' }
+  | { type: 'vibe_explain' }
+  | { type: 'mood_change';     hint: string }
+  | { type: 'mood_request' }
 
 // ── Pattern banks ────────────────────────────────────────────────────────────
 
@@ -61,7 +63,21 @@ const MOOD_CHANGE_PATTERNS = [
   /\b(something (else|different|new|other))\b/i,
   /\b(i('?m| am) (not|no longer) (feeling|in the mood for) (this|it))\b/i,
   /\b(switch (it up|the mood|the vibe))\b/i,
-  /\b(different (mood|vibe|genre|genre|style))\b/i,
+  /\b(different (mood|vibe|genre|style))\b/i,
+];
+
+const MORE_LIKE_THIS_PATTERNS = [
+  /\b(more like (this|that)|similar (to this|songs?|vibes?))\b/i,
+  /\b(keep (this|the) vibe|i (like|love) (this|it|this vibe|the vibe))\b/i,
+  /\b(give me more (like this|of this)|more of (this|the same))\b/i,
+  /\b(same (vibe|energy|mood|style))\b/i,
+];
+
+const VIBE_EXPLAIN_PATTERNS = [
+  /\b(what('?s| is) (the )?(vibe|mood|genre|style|feeling|this))\b/i,
+  /\b(why (this|these) songs?|explain (the )?(playlist|vibe|mood|choice))\b/i,
+  /\b(what kind of (music|songs?|vibe) is (this|that))\b/i,
+  /\b(tell me (about|more about) (this|the) (playlist|vibe|mood))\b/i,
 ];
 
 // ── Classifier ───────────────────────────────────────────────────────────────
@@ -83,41 +99,50 @@ export function classifyIntent(transcript: string): VoiceIntent {
     return { type: 'playback_control', action: 'stop' };
   }
 
-  // 3. Pause — check AFTER stop to avoid "stop the music" → pause instead of stop
+  // 3. Pause
   if (matchesAny(t, PAUSE_PATTERNS) && !matchesAny(t, PLAY_PATTERNS)) {
     return { type: 'playback_control', action: 'pause' };
   }
 
-  // 5. Previous
+  // 4. Previous
   if (matchesAny(t, PREVIOUS_PATTERNS)) {
     return { type: 'playback_control', action: 'previous' };
   }
 
-  // 6. Play / Resume — only if short and no mood keywords
+  // 5. Play / Resume — only if short and no mood keywords
   if (matchesAny(t, PLAY_PATTERNS) && t.split(' ').length <= 3) {
     return { type: 'playback_control', action: 'play' };
   }
 
-  // 7. Volume
+  // 6. Volume
   if (matchesAny(t, VOLUME_UP_PATTERNS))   return { type: 'volume', level: 'up' };
   if (matchesAny(t, VOLUME_DOWN_PATTERNS)) return { type: 'volume', level: 'down' };
 
-  // 8. Specific song — "play [name] by [artist]" / "put on [song]"
+  // 7. Specific song
   const songMatch = t.match(SPECIFIC_SONG_TRIGGERS);
   if (songMatch) {
     const query = songMatch[3].trim();
-    // If the query contains mood words → treat as mood_request instead
     if (!MOOD_WORDS.test(query) && query.split(' ').length <= 8) {
       return { type: 'specific_song', query };
     }
   }
 
-  // 9. Mood change (re-run pipeline)
+  // 8. More like this
+  if (matchesAny(t, MORE_LIKE_THIS_PATTERNS)) {
+    return { type: 'more_like_this' };
+  }
+
+  // 9. Vibe explain
+  if (matchesAny(t, VIBE_EXPLAIN_PATTERNS)) {
+    return { type: 'vibe_explain' };
+  }
+
+  // 10. Mood change
   if (matchesAny(t, MOOD_CHANGE_PATTERNS)) {
     return { type: 'mood_change', hint: transcript };
   }
 
-  // 10. Everything else → full mood request
+  // 11. Everything else → full mood request
   return { type: 'mood_request' };
 }
 
@@ -127,6 +152,8 @@ export function intentLabel(intent: VoiceIntent): string {
     case 'playback_control': return `⏯ ${intent.action}`;
     case 'volume':           return `🔊 volume ${intent.level}`;
     case 'specific_song':    return `🔍 song: "${intent.query}"`;
+    case 'more_like_this':   return '🔁 more like this';
+    case 'vibe_explain':     return '🎧 explain vibe';
     case 'mood_change':      return '🎭 mood change';
     case 'mood_request':     return '🎵 new mood';
   }

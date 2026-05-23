@@ -46,10 +46,17 @@ export function useWakeWord(onDetected: (emotion?: EmotionFeatures) => void) {
   const streamRef       = useRef<MediaStream | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  const { setListeningState } = useAppStore();
+  const { setListeningState, wakeWordThreshold } = useAppStore();
 
   // Keep callback ref in sync
   useEffect(() => { onDetectedRef.current = onDetected; });
+
+  // Send new threshold whenever it changes
+  useEffect(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'SET_THRESHOLD', value: wakeWordThreshold }));
+    }
+  }, [wakeWordThreshold]);
 
   const sendCommand = useCallback((type: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

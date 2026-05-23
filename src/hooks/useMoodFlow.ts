@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useContextSignals } from './useContextSignals';
+import { useTTS } from './useTTS';
 import { classifyIntent, intentLabel } from '@/lib/intent-classifier';
 import type { MoodObject } from '@/lib/groq';
 import type { SpotifyTrack } from '@/lib/spotify';
@@ -20,6 +21,7 @@ export function useMoodFlow() {
 
   const { startListening, isSupported } = useSpeechRecognition();
   const { contextString, timeHint } = useContextSignals();
+  const { speak, stopSpeaking } = useTTS();
 
   // ── Playback control (next / pause / play / previous / stop / volume) ────
   const handlePlaybackControl = useCallback(async (
@@ -147,6 +149,7 @@ export function useMoodFlow() {
         timestamp: Date.now(),
         tracks: [track],
       });
+      speak(`Now playing ${track.name} by ${track.artists.map(a => a.name).join(', ')}`);
       setListeningState('playing');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not play that song');
@@ -242,6 +245,9 @@ export function useMoodFlow() {
         tracks: tracks.slice(0, 5),
       });
 
+      // Speak the playlist name via TTS
+      speak(`Playing ${playlistName}`);
+
       setListeningState('playing');
     } catch (err) {
       console.error('[MoodFlow]', err);
@@ -254,11 +260,55 @@ export function useMoodFlow() {
     setQueue, setError, addConversationEntry,
   ]);
 
+  // ── More like this ─────────────────────────────────────────────────────────
+  const handleMoreLikeThis = useCallback(async (userInput: string) => {
+    const { currentTrack, currentMood } = useAppStore.getState();
+    if (!currentTrack && !currentMood) {
+      addConversationEntry({
+        id: crypto.randomUUID(), role: 'assistant',
+        content: 'Nothing is playing yet — tell me a mood first!',
+        timestamp: Date.now(),
+      });
+      return;
+    }
+    // Re-run pipeline with context hinting at the current track
+    const hint = currentTrack
+      ? `More songs similar to "${currentTrack.name}" by ${currentTrack.artists[0]?.name ?? ''}. Same vibe and energy.`
+      : `More songs like the current playlist: ${currentMood?.query_string}.`;
+    await runPipeline(hint);
+  }, [addConversationEntry, runPipeline]);
+
+  // ── Vibe explain ───────────────────────────────────────────────────────────
+  const handleVibeExplain = useCallback((userInput: string) => {
+    const { currentMood, currentTrack, playlistName } = useAppStore.getState();
+    addConversationEntry({
+      id: crypto.randomUUID(), role: 'user', content: userInput, timestamp: Date.now(),
+    });
+    if (!currentMood) {
+      addConversationEntry({
+        id: crypto.randomUUID(), role: 'assistant',
+        content: '🎵 No playlist active yet. Tell me a mood and I’ll explain the vibe!',
+        timestamp: Date.now(),
+      });
+      return;
+    }
+    const explanation =
+      `🎵 **${playlistName}**\n` +
+      `**Mood:** ${currentMood.mood} | **Energy:** ${Math.round(currentMood.energy * 100)}% | **Tempo:** ${currentMood.tempo}\n` +
+      `**Genres:** ${currentMood.genres.join(', ')}\n` +
+      `${currentMood.follow_up_context}`;
+    addConversationEntry({
+      id: crypto.randomUUID(), role: 'assistant', content: explanation, timestamp: Date.now(),
+    });
+    speak(currentMood.follow_up_context);
+  }, [addConversationEntry, speak]);
+
   // ── Main entry point — classify intent then route ─────────────────────────
   const startVoiceSession = useCallback(async () => {
     const { listeningState } = useAppStore.getState();
     if (listeningState === 'listening' || listeningState === 'processing') return;
 
+    stopSpeaking(); // Cancel any active TTS before listening
     setError(null);
     try {
       const transcript = await startListening();
@@ -281,6 +331,14 @@ export function useMoodFlow() {
           await handleSpecificSong(intent.query, text);
           break;
 
+        case 'more_like_this':
+          await handleMoreLikeThis(text);
+          break;
+
+        case 'vibe_explain':
+          handleVibeExplain(text);
+          break;
+
         case 'mood_change':
           await runPipeline(`Change the mood. ${intent.hint}`);
           break;
@@ -299,7 +357,8 @@ export function useMoodFlow() {
         setListeningState('idle');
       }
     }
-  }, [startListening, runPipeline, handlePlaybackControl, handleVolume, handleSpecificSong, setError, setListeningState]);
+  }, [startListening, runPipeline, handlePlaybackControl, handleVolume, handleSpecificSong,
+      handleMoreLikeThis, handleVibeExplain, stopSpeaking, setError, setListeningState]);
 
   return { startVoiceSession, runPipeline, isSupported };
 }
