@@ -1,9 +1,15 @@
 'use client';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 
-const WS_URL = 'ws://127.0.0.1:8765';
+// Local dev → Python on your PC.  Production → VPS over SSL.
+const WS_URL =
+  process.env.NEXT_PUBLIC_WS_URL ?? 'ws://127.0.0.1:8765';
+
 const RECONNECT_DELAY_MS = 3000;
+// PCM chunk size sent to VPS (matches openWakeWord's expected frame size)
+const CHUNK_SAMPLES = 1280;   // 80ms @ 16kHz
+const SAMPLE_RATE   = 16000;
 
 interface EmotionFeatures {
   emotion: string;
@@ -21,21 +27,29 @@ interface WakeWordEvent {
 }
 
 /**
- * Connects to the Python OpenWakeWord WebSocket sidecar.
- * Uses a stable ref for the onDetected callback to avoid reconnection loops.
+ * Connects to the wakeword WebSocket server.
+ *
+ * LOCAL DEV (ws://127.0.0.1:8765):
+ *   Python captures mic via pyaudio — no audio streaming needed.
+ *
+ * PRODUCTION (wss://ws.yourdomain.com):
+ *   Browser captures mic via getUserMedia, streams raw PCM Int16 chunks
+ *   to the VPS, which runs openWakeWord on the received audio.
  */
 export function useWakeWord(onDetected: (emotion?: EmotionFeatures) => void) {
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeRef = useRef(true);
-  // Store callback in ref so connect() never needs to re-run when it changes
-  const onDetectedRef = useRef(onDetected);
+  const wsRef           = useRef<WebSocket | null>(null);
+  const reconnectRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRef       = useRef(true);
+  const onDetectedRef   = useRef(onDetected);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorRef    = useRef<ScriptProcessorNode | null>(null);
+  const streamRef       = useRef<MediaStream | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+
   const { setListeningState } = useAppStore();
 
-  // Keep ref in sync without triggering re-renders
-  useEffect(() => {
-    onDetectedRef.current = onDetected;
-  });
+  // Keep callback ref in sync
+  useEffect(() => { onDetectedRef.current = onDetected; });
 
   const sendCommand = useCallback((type: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -43,10 +57,58 @@ export function useWakeWord(onDetected: (emotion?: EmotionFeatures) => void) {
     }
   }, []);
 
-  const pauseMic = useCallback(() => sendCommand('PAUSE_MIC'), [sendCommand]);
+  const pauseMic  = useCallback(() => sendCommand('PAUSE_MIC'),  [sendCommand]);
   const resumeMic = useCallback(() => sendCommand('RESUME_MIC'), [sendCommand]);
 
-  // connect is stable — no deps that change
+  // ── Audio streaming (production VPS mode only) ──────────────────────────
+  const stopAudioStream = useCallback(() => {
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  const startAudioStream = useCallback(async (ws: WebSocket) => {
+    // Only stream audio in production (VPS has no mic of its own)
+    if (window.location.protocol !== 'https:') return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: true },
+      });
+      streamRef.current = stream;
+
+      const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      audioContextRef.current = ctx;
+
+      const source    = ctx.createMediaStreamSource(stream);
+      // ScriptProcessor is deprecated but still the most compatible way
+      // to get raw PCM chunks without an AudioWorklet module file
+      const processor = ctx.createScriptProcessor(CHUNK_SAMPLES, 1, 1);
+      processorRef.current = processor;
+
+      processor.onaudioprocess = (e) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        const float32 = e.inputBuffer.getChannelData(0);
+        // Convert Float32 → Int16 PCM (what openWakeWord expects)
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+        }
+        ws.send(int16.buffer);
+      };
+
+      source.connect(processor);
+      processor.connect(ctx.destination);
+      console.log('[WakeWord] 🎤 Audio streaming started → VPS');
+    } catch (err) {
+      console.warn('[WakeWord] Mic access denied — wake word disabled:', err);
+    }
+  }, []);
+
+  // ── WebSocket connection ────────────────────────────────────────────────
   const connectRef = useRef<(() => void) | undefined>(undefined);
   connectRef.current = () => {
     if (!activeRef.current) return;
@@ -56,50 +118,51 @@ export function useWakeWord(onDetected: (emotion?: EmotionFeatures) => void) {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[WakeWord] Connected to Python sidecar');
+        console.log('[WakeWord] Connected →', WS_URL);
+        setIsConnected(true);
         setListeningState('wake_word');
+        // In production: stream browser mic to VPS
+        startAudioStream(ws);
       };
 
       ws.onmessage = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data as string) as WakeWordEvent;
           if (data.type === 'WAKE_WORD_DETECTED') {
-            console.log(`[WakeWord] Detected! model=${data.model} score=${data.score} emotion=${data.emotion?.emotion}`);
+            console.log(`[WakeWord] 🔔 Detected! model=${data.model} score=${data.score} emotion=${data.emotion?.emotion ?? 'n/a'}`);
             onDetectedRef.current(data.emotion);
           }
-        } catch {
-          // ignore parse errors
-        }
+        } catch { /* ignore */ }
       };
 
       ws.onclose = () => {
         wsRef.current = null;
+        setIsConnected(false);
+        stopAudioStream();
         console.log('[WakeWord] Disconnected — retrying in 3s…');
         if (activeRef.current) {
-          reconnectTimerRef.current = setTimeout(() => connectRef.current?.(), RECONNECT_DELAY_MS);
+          reconnectRef.current = setTimeout(() => connectRef.current?.(), RECONNECT_DELAY_MS);
         }
       };
 
       ws.onerror = () => ws.close();
     } catch {
       if (activeRef.current) {
-        reconnectTimerRef.current = setTimeout(() => connectRef.current?.(), RECONNECT_DELAY_MS);
+        reconnectRef.current = setTimeout(() => connectRef.current?.(), RECONNECT_DELAY_MS);
       }
     }
   };
 
-  // Only run once on mount
   useEffect(() => {
     activeRef.current = true;
     connectRef.current?.();
-
     return () => {
       activeRef.current = false;
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      stopAudioStream();
       wsRef.current?.close();
     };
-  }, []); // empty deps — connect once, never re-run
+  }, [stopAudioStream]);
 
-  const isConnected = wsRef.current?.readyState === WebSocket.OPEN;
   return { isConnected, pauseMic, resumeMic };
 }
