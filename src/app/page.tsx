@@ -12,13 +12,13 @@ import { PlaybackControls } from '@/components/PlaybackControls/PlaybackControls
 import { ConversationFeed } from '@/components/ConversationFeed/ConversationFeed';
 import { SpotifyLogin } from '@/components/SpotifyLogin/SpotifyLogin';
 import styles from './page.module.css';
-import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle } from 'lucide-react';
+import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages } from 'lucide-react';
 
 type MobileTab = 'voice' | 'player' | 'chat';
 
 function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
   const [value, setValue] = useState('');
-  const { listeningState } = useAppStore();
+  const { listeningState, language } = useAppStore();
   const isProcessing = listeningState === 'processing';
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -34,7 +34,7 @@ function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
         id="mood-text-input"
         type="text"
         className={styles.textInput}
-        placeholder='Type your mood… "rainy night vibes"'
+        placeholder={language === 'ml' ? 'നിങ്ങളുടെ മൂഡ് ടൈപ്പ് ചെയ്യൂ…' : 'Type your mood… "rainy night vibes"'}
         value={value}
         onChange={e => setValue(e.target.value)}
         disabled={isProcessing}
@@ -54,7 +54,7 @@ function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
   );
 }
 
-const MOOD_CHIPS = [
+const MOOD_CHIPS_EN = [
   '🌧️ Rainy night drive',
   '💪 Gym beast mode',
   '🌙 2AM thoughts',
@@ -63,8 +63,17 @@ const MOOD_CHIPS = [
   '🔥 Summer energy',
 ];
 
+const MOOD_CHIPS_ML = [
+  '🌧️ മഴ രാത്രി',
+  '💔 വേദനയുള്ള ഗാനങ്ങൾ',
+  '🎵 ക്ലാസ്സിക്കൽ',
+  '🔥 പാർട്ടി ഗാനങ്ങൾ',
+  '😌 ശാന്തമായ ഗാനങ്ങൾ',
+  '💑 റൊമാന്റിക്',
+];
+
 export default function HomePage() {
-  const { accessToken, error, setError, setAccessToken, deviceId, detectedEmotion, setDetectedEmotion } = useAppStore();
+  const { accessToken, error, setError, setAccessToken, deviceId, detectedEmotion, setDetectedEmotion, language, setLanguage } = useAppStore();
   const { startVoiceSession, runPipeline, isSupported } = useMoodFlow();
   const [activeTab, setActiveTab] = useState<MobileTab>('voice');
 
@@ -158,6 +167,19 @@ export default function HomePage() {
         </div>
 
         <div className={styles.headerRight}>
+          {/* Language toggle */}
+          <motion.button
+            id="lang-toggle-btn"
+            className={`${styles.langToggle} ${language === 'ml' ? styles.langToggleActive : ''}`}
+            onClick={() => setLanguage(language === 'en' ? 'ml' : 'en')}
+            whileTap={{ scale: 0.9 }}
+            title={language === 'ml' ? 'Switch to English' : 'Switch to Malayalam'}
+            aria-label="Toggle language"
+          >
+            <Languages size={13} />
+            <span>{language === 'ml' ? 'മല' : 'EN'}</span>
+          </motion.button>
+
           {/* SDK dot */}
           <div className={styles.sdkDot} title={deviceId ? 'Spotify SDK ready' : 'SDK connecting…'}>
             <motion.span
@@ -214,7 +236,7 @@ export default function HomePage() {
           <TextInput onSubmit={runPipeline} />
           {/* Mood chips */}
           <div className={styles.chipsGrid}>
-            {MOOD_CHIPS.map((ex) => (
+            {(language === 'ml' ? MOOD_CHIPS_ML : MOOD_CHIPS_EN).map((ex) => (
               <motion.button
                 key={ex}
                 className={styles.chip}
@@ -259,7 +281,7 @@ export default function HomePage() {
               )}
               <TextInput onSubmit={runPipeline} />
               <div className={styles.mobileChips}>
-                {MOOD_CHIPS.map((ex) => (
+                {(language === 'ml' ? MOOD_CHIPS_ML : MOOD_CHIPS_EN).map((ex) => (
                   <motion.button
                     key={ex}
                     className={styles.chip}

@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/useAppStore';
 
 export function useSpeechRecognition() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const { setTranscript, setListeningState } = useAppStore();
+  const { setTranscript, setListeningState, language } = useAppStore();
 
   const isSupported =
     typeof window !== 'undefined' &&
@@ -23,7 +23,7 @@ export function useSpeechRecognition() {
         window.SpeechRecognition ?? window.webkitSpeechRecognition;
 
       const recognition = new SpeechRecognitionAPI();
-      recognition.lang = 'en-US';
+      recognition.lang = language === 'ml' ? 'ml-IN' : 'en-US';
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
       recognition.continuous = false;

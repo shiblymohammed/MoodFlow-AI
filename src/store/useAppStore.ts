@@ -54,6 +54,10 @@ export interface AppState {
   // Error
   error: string | null;
   setError: (err: string | null) => void;
+
+  // Language
+  language: 'en' | 'ml';
+  setLanguage: (lang: 'en' | 'ml') => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -100,4 +104,8 @@ export const useAppStore = create<AppState>((set) => ({
   // Error
   error: null,
   setError: (err) => set({ error: err }),
+
+  // Language
+  language: 'en',
+  setLanguage: (lang) => set({ language: lang }),
 }));
