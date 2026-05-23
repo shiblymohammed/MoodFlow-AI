@@ -12,7 +12,9 @@ import { PlaybackControls } from '@/components/PlaybackControls/PlaybackControls
 import { ConversationFeed } from '@/components/ConversationFeed/ConversationFeed';
 import { SpotifyLogin } from '@/components/SpotifyLogin/SpotifyLogin';
 import styles from './page.module.css';
-import { AlertCircle, X, LogOut, Radio } from 'lucide-react';
+import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle } from 'lucide-react';
+
+type MobileTab = 'voice' | 'player' | 'chat';
 
 function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
   const [value, setValue] = useState('');
@@ -32,7 +34,7 @@ function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
         id="mood-text-input"
         type="text"
         className={styles.textInput}
-        placeholder='Or type your mood… "rainy night vibes"'
+        placeholder='Type your mood… "rainy night vibes"'
         value={value}
         onChange={e => setValue(e.target.value)}
         disabled={isProcessing}
@@ -52,21 +54,25 @@ function TextInput({ onSubmit }: { onSubmit: (text: string) => void }) {
   );
 }
 
+const MOOD_CHIPS = [
+  '🌧️ Rainy night drive',
+  '💪 Gym beast mode',
+  '🌙 2AM thoughts',
+  '🎓 Deep focus',
+  '💔 Sad Tamil melodies',
+  '🔥 Summer energy',
+];
+
 export default function HomePage() {
   const { accessToken, error, setError, setAccessToken, deviceId, detectedEmotion, setDetectedEmotion } = useAppStore();
   const { startVoiceSession, runPipeline, isSupported } = useMoodFlow();
+  const [activeTab, setActiveTab] = useState<MobileTab>('voice');
 
-  // Initialize Spotify player when authed
   useSpotifyPlayer();
-
-  // Context signals: time, weather, device — auto-injected into Groq via useMoodFlow
   const { weatherData } = useContextSignals();
 
-  // Connect to Python OpenWakeWord sidecar — auto-triggers voice session on detection
-  // pauseMic/resumeMic tell Python to yield the mic to the browser's Web Speech API
   const { isConnected: wakeWordConnected, pauseMic, resumeMic } = useWakeWord(
     async (emotion) => {
-      // Store detected emotion for context injection
       if (emotion) setDetectedEmotion(emotion);
       pauseMic();
       try {
@@ -77,7 +83,6 @@ export default function HomePage() {
     }
   );
 
-  // Also wrap manual voice button presses with mic pause
   const handleVoicePress = async () => {
     pauseMic();
     try {
@@ -86,9 +91,6 @@ export default function HomePage() {
       resumeMic();
     }
   };
-
-  // Token is set by the /callback page into Zustand after OAuth exchange.
-  // No polling needed — if accessToken is null, show login screen.
 
   const handleLogout = async () => {
     await fetch('/api/spotify/token', { method: 'DELETE' });
@@ -99,9 +101,17 @@ export default function HomePage() {
     return <SpotifyLogin />;
   }
 
+  const emotionEmoji =
+    detectedEmotion?.emotion === 'excited'  ? '⚡' :
+    detectedEmotion?.emotion === 'stressed' ? '😤' :
+    detectedEmotion?.emotion === 'sad'      ? '😢' :
+    detectedEmotion?.emotion === 'focused'  ? '🎯' :
+    detectedEmotion?.emotion === 'sleepy'   ? '😴' : '🎭';
+
   return (
     <main className={styles.main}>
-      {/* Header */}
+
+      {/* ── Header ──────────────────────────────────────── */}
       <motion.header
         className={styles.header}
         initial={{ opacity: 0, y: -20 }}
@@ -111,69 +121,57 @@ export default function HomePage() {
         <div className={styles.brand}>
           <span className={styles.brandIcon}>🎵</span>
           <span className={styles.brandName}>
-            <span className="gradient-text">MoodFlow</span> AI
+            <span className="gradient-text">MoodFlow</span>
+            <span className={styles.brandAI}> AI</span>
           </span>
         </div>
-        <div className={styles.headerActions}>
+
+        <div className={styles.headerPills}>
           {/* Weather pill */}
           {weatherData && (
-            <div
-              className={styles.wakeWordStatus}
-              title={`${weatherData.label}, ${weatherData.temperatureCelsius}°C — used to personalise your music`}
-            >
+            <div className={styles.pill} title={`${weatherData.label}, ${weatherData.temperatureCelsius}°C`}>
               <span>{weatherData.emoji}</span>
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                {weatherData.temperatureCelsius}°C
-              </span>
+              <span className={styles.pillText}>{weatherData.temperatureCelsius}°C</span>
             </div>
           )}
 
-          {/* SDK device status */}
-          <div
-            className={styles.wakeWordStatus}
-            title={deviceId ? `SDK device: ${deviceId.slice(0, 8)}…` : 'Spotify SDK connecting…'}
-          >
-            <span style={{ fontSize: '8px', color: deviceId ? 'var(--green)' : 'var(--amber)' }}>●</span>
-            <span style={{ color: deviceId ? 'var(--text-secondary)' : 'var(--amber)', fontSize: '0.75rem' }}>
-              {deviceId ? 'SDK ready' : 'SDK connecting…'}
-            </span>
-          </div>
-
           {/* Wake word status */}
-          <div className={styles.wakeWordStatus} title={wakeWordConnected ? 'Wake word active — say "Hey Jarvis"' : 'Python sidecar not running'}>
-            <Radio size={14} style={{ color: wakeWordConnected ? 'var(--cyan)' : 'var(--text-muted)' }} />
-            <span style={{ color: wakeWordConnected ? 'var(--cyan)' : 'var(--text-muted)' }}>
-              {wakeWordConnected ? 'Hey Jarvis' : 'Wake word off'}
+          <div
+            className={styles.pill}
+            title={wakeWordConnected ? 'Wake word active — say "Hey Jarvis"' : 'Wakeword offline'}
+          >
+            <Radio size={12} style={{ color: wakeWordConnected ? 'var(--cyan)' : 'var(--text-muted)' }} />
+            <span className={styles.pillText} style={{ color: wakeWordConnected ? 'var(--cyan)' : 'var(--text-muted)' }}>
+              {wakeWordConnected ? 'Hey Jarvis' : 'Offline'}
             </span>
           </div>
 
-          {/* Emotion pill — shown after wake word detects voice tone */}
+          {/* Emotion pill — only when detected */}
           {detectedEmotion && detectedEmotion.emotion !== 'neutral' && (
-            <div
-              className={styles.wakeWordStatus}
-              title={`Voice emotion: ${detectedEmotion.emotion} (${Math.round(detectedEmotion.confidence * 100)}% confidence) — influences music selection`}
-            >
-              <span>{
-                detectedEmotion.emotion === 'excited'  ? '⚡' :
-                detectedEmotion.emotion === 'stressed' ? '😤' :
-                detectedEmotion.emotion === 'sad'      ? '😢' :
-                detectedEmotion.emotion === 'focused'  ? '🎯' :
-                detectedEmotion.emotion === 'sleepy'   ? '😴' : '🎭'
-              }</span>
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'capitalize' }}>
+            <div className={styles.pill} title={`Detected tone: ${detectedEmotion.emotion}`}>
+              <span>{emotionEmoji}</span>
+              <span className={styles.pillText} style={{ textTransform: 'capitalize' }}>
                 {detectedEmotion.emotion}
               </span>
             </div>
           )}
+        </div>
 
-          <motion.div className={styles.statusDot}
-            animate={{ opacity: [1, 0.4, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          <span className={styles.statusLabel}>Spotify connected</span>
+        <div className={styles.headerRight}>
+          {/* SDK dot */}
+          <div className={styles.sdkDot} title={deviceId ? 'Spotify SDK ready' : 'SDK connecting…'}>
+            <motion.span
+              className={styles.dot}
+              style={{ background: deviceId ? 'var(--green)' : 'var(--amber)' }}
+              animate={deviceId ? { opacity: [1, 0.4, 1] } : { opacity: 1 }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+            <span className={styles.sdkLabel}>{deviceId ? 'Live' : 'Sync…'}</span>
+          </div>
+
           <button
             id="logout-btn"
-            className={styles.logoutBtn}
+            className={styles.iconBtn}
             onClick={handleLogout}
             aria-label="Disconnect Spotify"
           >
@@ -182,7 +180,7 @@ export default function HomePage() {
         </div>
       </motion.header>
 
-      {/* Error toast */}
+      {/* ── Error toast ─────────────────────────────────── */}
       <AnimatePresence>
         {error && (
           <motion.div
@@ -200,8 +198,9 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      <div className={styles.layout}>
-        {/* Left panel — Voice */}
+      {/* ── Desktop layout (2-column) ────────────────────── */}
+      <div className={styles.desktopLayout}>
+        {/* Left: Voice */}
         <motion.section
           className={styles.voicePanel}
           initial={{ opacity: 0, x: -30 }}
@@ -209,21 +208,27 @@ export default function HomePage() {
           transition={{ delay: 0.1, duration: 0.5 }}
         >
           <VoiceOrb onPress={isSupported ? handleVoicePress : () => {}} />
-
           {!isSupported && (
-            <motion.p
-              className={styles.noSpeechWarning}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              ⚠️ Voice not supported. Use text input below.
-            </motion.p>
+            <p className={styles.noSpeechWarning}>⚠️ Voice not supported. Use text input.</p>
           )}
-
           <TextInput onSubmit={runPipeline} />
+          {/* Mood chips */}
+          <div className={styles.chipsGrid}>
+            {MOOD_CHIPS.map((ex) => (
+              <motion.button
+                key={ex}
+                className={styles.chip}
+                onClick={() => runPipeline(ex.replace(/^[^\s]+\s/, ''))}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+              >
+                {ex}
+              </motion.button>
+            ))}
+          </div>
         </motion.section>
 
-        {/* Right panel — Player + Chat */}
+        {/* Right: Player + Chat */}
         <motion.section
           className={styles.playerPanel}
           initial={{ opacity: 0, x: 30 }}
@@ -236,35 +241,95 @@ export default function HomePage() {
         </motion.section>
       </div>
 
-      {/* Mood examples bar */}
-      <motion.div
-        className={styles.examplesBar}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <span className={styles.examplesLabel}>Try:</span>
-        <div className={styles.examples}>
-          {[
-            '🌧️ Rainy night drive',
-            '💪 Gym beast mode',
-            '🌙 2AM thoughts',
-            '🎓 Deep focus',
-            '💔 Sad Tamil melodies',
-            '🔥 Summer energy',
-          ].map((ex) => (
-            <motion.button
-              key={ex}
-              className={styles.exampleChip}
-              onClick={() => runPipeline(ex.replace(/^[^\s]+\s/, ''))}
-              whileHover={{ scale: 1.05, borderColor: 'var(--violet-light)' }}
-              whileTap={{ scale: 0.97 }}
+      {/* ── Mobile tab content ───────────────────────────── */}
+      <div className={styles.mobileContent}>
+        <AnimatePresence mode="wait">
+          {activeTab === 'voice' && (
+            <motion.div
+              key="voice"
+              className={styles.mobileTab}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.2 }}
             >
-              {ex}
-            </motion.button>
-          ))}
-        </div>
-      </motion.div>
+              <VoiceOrb onPress={isSupported ? handleVoicePress : () => {}} />
+              {!isSupported && (
+                <p className={styles.noSpeechWarning}>⚠️ Voice not supported. Use text input.</p>
+              )}
+              <TextInput onSubmit={runPipeline} />
+              <div className={styles.mobileChips}>
+                {MOOD_CHIPS.map((ex) => (
+                  <motion.button
+                    key={ex}
+                    className={styles.chip}
+                    onClick={() => runPipeline(ex.replace(/^[^\s]+\s/, ''))}
+                    whileTap={{ scale: 0.96 }}
+                  >
+                    {ex}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'player' && (
+            <motion.div
+              key="player"
+              className={styles.mobileTab}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <NowPlaying />
+              <PlaybackControls />
+            </motion.div>
+          )}
+
+          {activeTab === 'chat' && (
+            <motion.div
+              key="chat"
+              className={styles.mobileTab}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ConversationFeed />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Mobile bottom nav ────────────────────────────── */}
+      <nav className={styles.bottomNav} aria-label="App navigation">
+        {(
+          [
+            { id: 'voice',  label: 'Voice',  Icon: Mic },
+            { id: 'player', label: 'Player', Icon: Music2 },
+            { id: 'chat',   label: 'Chat',   Icon: MessageCircle },
+          ] as { id: MobileTab; label: string; Icon: React.ElementType }[]
+        ).map(({ id, label, Icon }) => (
+          <motion.button
+            key={id}
+            className={`${styles.navBtn} ${activeTab === id ? styles.navBtnActive : ''}`}
+            onClick={() => setActiveTab(id)}
+            whileTap={{ scale: 0.9 }}
+            aria-label={label}
+          >
+            <Icon size={22} />
+            <span className={styles.navLabel}>{label}</span>
+            {activeTab === id && (
+              <motion.div
+                className={styles.navIndicator}
+                layoutId="nav-indicator"
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              />
+            )}
+          </motion.button>
+        ))}
+      </nav>
     </main>
   );
 }

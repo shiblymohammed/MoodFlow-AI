@@ -4,7 +4,6 @@
 
 /* --- Design Tokens --- */
 :root {
-  /* Colors */
   --color-bg: #080b12;
   --color-bg-2: #0d1117;
   --color-surface: rgba(255, 255, 255, 0.04);
@@ -12,7 +11,6 @@
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-bright: rgba(255, 255, 255, 0.15);
 
-  /* Brand palette */
   --violet: #8b5cf6;
   --violet-light: #a78bfa;
   --violet-glow: rgba(139, 92, 246, 0.35);
@@ -24,33 +22,34 @@
   --amber: #f59e0b;
   --green: #10b981;
 
-  /* Typography */
   --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
 
-  /* Text */
   --text-primary: rgba(255, 255, 255, 0.95);
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-muted: rgba(255, 255, 255, 0.35);
 
-  /* Radius */
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
   --radius-xl: 28px;
   --radius-full: 9999px;
 
-  /* Shadows */
   --shadow-violet: 0 0 40px rgba(139, 92, 246, 0.25), 0 0 80px rgba(139, 92, 246, 0.1);
   --shadow-cyan: 0 0 40px rgba(6, 182, 212, 0.2), 0 0 80px rgba(6, 182, 212, 0.08);
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
 
-  /* Transitions */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-fast: 150ms;
   --duration-normal: 250ms;
   --duration-slow: 400ms;
+
+  /* Safe area insets for notch / home bar */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 /* --- Reset --- */
@@ -64,7 +63,12 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Smooth momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  /* Prevent overscroll bounce on the root */
+  overscroll-behavior: none;
+  height: 100%;
 }
 
 body {
@@ -72,8 +76,25 @@ body {
   background-color: var(--color-bg);
   color: var(--text-primary);
   min-height: 100dvh;
+  height: 100%;
   overflow-x: hidden;
   position: relative;
+  /* Prevent pull-to-refresh hijacking */
+  overscroll-behavior-y: none;
+}
+
+/* --- Touch optimisations --- */
+/* Remove 300ms tap delay on all interactive elements */
+button, a, input, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth scroll containers */
+.scroll-smooth {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* --- Aurora Background --- */
@@ -97,17 +118,11 @@ body::before {
       radial-gradient(ellipse 60% 40% at 80% 10%, rgba(6, 182, 212, 0.12) 0%, transparent 55%),
       radial-gradient(ellipse 50% 60% at 50% 100%, rgba(244, 63, 94, 0.08) 0%, transparent 50%);
   }
-  33% {
+  50% {
     background:
-      radial-gradient(ellipse 70% 45% at 60% 5%, rgba(139, 92, 246, 0.2) 0%, transparent 60%),
-      radial-gradient(ellipse 55% 50% at 10% 20%, rgba(6, 182, 212, 0.14) 0%, transparent 55%),
+      radial-gradient(ellipse 65% 55% at 70% 5%, rgba(139, 92, 246, 0.2) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 35% at 10% 25%, rgba(6, 182, 212, 0.14) 0%, transparent 55%),
       radial-gradient(ellipse 60% 40% at 80% 90%, rgba(244, 63, 94, 0.1) 0%, transparent 50%);
-  }
-  66% {
-    background:
-      radial-gradient(ellipse 65% 55% at 30% 0%, rgba(139, 92, 246, 0.16) 0%, transparent 60%),
-      radial-gradient(ellipse 70% 35% at 90% 30%, rgba(6, 182, 212, 0.1) 0%, transparent 55%),
-      radial-gradient(ellipse 45% 65% at 20% 100%, rgba(244, 63, 94, 0.09) 0%, transparent 50%);
   }
   100% {
     background:
@@ -117,7 +132,7 @@ body::before {
   }
 }
 
-/* --- Glassmorphism Utility --- */
+/* --- Glassmorphism --- */
 .glass {
   background: var(--color-surface);
   backdrop-filter: blur(20px) saturate(180%);
@@ -152,14 +167,16 @@ p { line-height: 1.6; }
   background-clip: text;
 }
 
-/* --- Scrollbar --- */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius-full);
+/* --- Scrollbar (desktop) --- */
+@media (hover: hover) {
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-full);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
 /* --- Selection --- */
 ::selection {
@@ -205,16 +222,13 @@ p { line-height: 1.6; }
   50% { height: 20px; }
 }
 
-/* --- Utility classes --- */
+/* --- Utilities --- */
 .animate-fade-in-up {
   animation: fade-in-up var(--duration-slow) var(--ease-smooth) forwards;
 }
-
 .animate-float {
   animation: float 4s ease-in-out infinite;
 }
-
-/* --- Layout helpers --- */
 .z-content { position: relative; z-index: 1; }
 
 /* --- Button base --- */
@@ -223,13 +237,16 @@ button {
   cursor: pointer;
   border: none;
   background: none;
+  /* Disable iOS button default styling */
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-/* --- Link reset --- */
 a { color: inherit; text-decoration: none; }
 
-/* --- Input reset --- */
 input, textarea {
   font-family: var(--font-body);
   color: var(--text-primary);
+  -webkit-appearance: none;
+  appearance: none;
 }

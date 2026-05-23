@@ -1,0 +1,35 @@
+{
+  "name": "MoodFlow AI",
+  "short_name": "MoodFlow",
+  "description": "AI-powered mood music assistant. Say how you feel, hear what fits.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080b12",
+  "theme_color": "#8b5cf6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["music", "entertainment", "lifestyle"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Voice Mode",
+      "short_name": "Voice",
+      "description": "Start a voice session",
+      "url": "/?tab=voice",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
