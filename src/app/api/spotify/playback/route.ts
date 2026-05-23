@@ -107,6 +107,25 @@ export async function POST(request: NextRequest) {
         }
         break;
 
+      case 'seek': {
+        const posMs = body.positionMs;
+        if (posMs === undefined) return NextResponse.json({ error: 'Missing positionMs' }, { status: 400 });
+        await spotifyPut(`/me/player/seek?position_ms=${Math.round(posMs)}&device_id=${deviceId}`, token);
+        break;
+      }
+
+      case 'shuffle': {
+        const state = body.state ? 'true' : 'false';
+        await spotifyPut(`/me/player/shuffle?state=${state}&device_id=${deviceId}`, token);
+        break;
+      }
+
+      case 'repeat': {
+        const repeatState = body.state ?? 'off'; // 'off' | 'track' | 'context'
+        await spotifyPut(`/me/player/repeat?state=${repeatState}&device_id=${deviceId}`, token);
+        break;
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }

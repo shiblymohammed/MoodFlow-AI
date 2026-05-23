@@ -18,6 +18,10 @@ import { VibeRoulette } from '@/components/VibeRoulette/VibeRoulette';
 import { Lyrics } from '@/components/Lyrics/Lyrics';
 import { useBiometrics } from '@/hooks/useBiometrics';
 import { SessionHistory } from '@/components/SessionHistory/SessionHistory';
+import { AudioFeatures } from '@/components/AudioFeatures/AudioFeatures';
+import { useAudioFeatures } from '@/hooks/useAudioFeatures';
+import { useDominantColor } from '@/hooks/useDominantColor';
+import { setQueueRefillCallback } from '@/hooks/useSpotifyPlayer';
 import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings, Heart, History } from 'lucide-react';
 
 type MobileTab = 'voice' | 'player' | 'chat' | 'history';
@@ -87,6 +91,14 @@ export default function HomePage() {
   useSpotifyPlayer();
   const { weatherData } = useContextSignals();
   const { state: hrState, data: hrData, isSupported: btSupported, connect: connectHR } = useBiometrics(runPipeline);
+
+  // New player intelligence hooks
+  useAudioFeatures();
+  useDominantColor();
+
+  // Register smart queue refill — auto-reload when < 2 songs left
+  const { dominantColor } = useAppStore();
+  setQueueRefillCallback(runPipeline);
 
   const { isConnected: wakeWordConnected, pauseMic, resumeMic } = useWakeWord(
     async (emotion) => {
@@ -304,9 +316,13 @@ export default function HomePage() {
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
+          style={dominantColor ? {
+            boxShadow: `0 0 80px ${dominantColor}22, 0 0 160px ${dominantColor}11`,
+          } : {}}
         >
           <NowPlaying />
           <PlaybackControls />
+          <AudioFeatures />
           <Lyrics />
           <SessionHistory />
           <ConversationFeed />

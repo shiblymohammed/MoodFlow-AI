@@ -48,6 +48,10 @@ interface SpotifyPlayerState {
 let sdkScriptLoaded = false;
 let sdkReady = false;
 
+// Module-level refill callback — set by page.tsx
+let queueRefillFn: ((q: string) => void) | null = null;
+export function setQueueRefillCallback(fn: (q: string) => void) { queueRefillFn = fn; }
+
 export function useSpotifyPlayer() {
   const playerRef = useRef<SpotifyPlayer | null>(null);
   const initializedRef = useRef(false);
@@ -117,7 +121,7 @@ export function useSpotifyPlayer() {
 
       // Record every track change to song history
       if (!s.paused) {
-        const { currentMood, playlistName } = useAppStore.getState();
+        const { currentMood, playlistName, queue } = useAppStore.getState();
         addToSongHistory({
           id: crypto.randomUUID(),
           track,
@@ -125,6 +129,14 @@ export function useSpotifyPlayer() {
           mood: currentMood,
           playlistName,
         });
+
+        // Smart queue refill — fire when only 1 song left in queue
+        if (queue.length <= 2 && queueRefillFn) {
+          const query = currentMood
+            ? `more songs like this ${currentMood.mood} ${currentMood.genres.slice(0,2).join(' ')}`
+            : 'more songs like this';
+          queueRefillFn(query);
+        }
       }
     });
 

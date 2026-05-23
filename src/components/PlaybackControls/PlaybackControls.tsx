@@ -1,11 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useAppStore } from '@/store/useAppStore';
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer';
 import styles from './PlaybackControls.module.css';
-import { SkipBack, Play, Pause, SkipForward, Volume2, ListMusic, ChevronDown, Music2 } from 'lucide-react';
+import {
+  SkipBack, Play, Pause, SkipForward, Volume2,
+  ListMusic, ChevronDown, Music2, Shuffle, Repeat, Repeat1,
+} from 'lucide-react';
 
 function formatMs(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -13,10 +16,23 @@ function formatMs(ms: number): string {
 }
 
 export function PlaybackControls() {
-  const { isPlaying, volume, setVolume, deviceId, queue, currentTrack } = useAppStore();
+  const {
+    isPlaying, volume, setVolume, deviceId,
+    queue, currentTrack, accessToken,
+    playbackPositionMs,
+    shuffle, setShuffle,
+    repeatMode, setRepeatMode,
+    dominantColor,
+  } = useAppStore();
+
   const { togglePlay, nextTrack, previousTrack, setPlayerVolume } = useSpotifyPlayer();
   const [queueOpen, setQueueOpen] = useState(false);
 
+  const duration = currentTrack?.duration_ms ?? 0;
+  const progress = duration > 0 ? Math.min(playbackPositionMs / duration, 1) : 0;
+  const col = dominantColor ?? 'var(--violet)';
+
+  // ── Volume ──────────────────────────────────────────────
   const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = Number(e.target.value);
     setVolume(v);
@@ -30,6 +46,44 @@ export function PlaybackControls() {
     }
   };
 
+  // ── Seek ─────────────────────────────────────────────────
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!deviceId || !accessToken || !duration) return;
+    const posMs = Math.round(Number(e.target.value) * duration);
+    fetch('/api/spotify/playback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'seek', deviceId, positionMs: posMs }),
+    }).catch(console.error);
+  }, [deviceId, accessToken, duration]);
+
+  // ── Shuffle ───────────────────────────────────────────────
+  const handleShuffle = useCallback(() => {
+    const next = !shuffle;
+    setShuffle(next);
+    if (deviceId && accessToken) {
+      fetch('/api/spotify/playback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'shuffle', deviceId, state: next }),
+      }).catch(console.error);
+    }
+  }, [shuffle, setShuffle, deviceId, accessToken]);
+
+  // ── Repeat ────────────────────────────────────────────────
+  const handleRepeat = useCallback(() => {
+    const modes: ('off' | 'track' | 'context')[] = ['off', 'track', 'context'];
+    const next = modes[(modes.indexOf(repeatMode) + 1) % 3];
+    setRepeatMode(next);
+    if (deviceId && accessToken) {
+      fetch('/api/spotify/playback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'repeat', deviceId, state: next }),
+      }).catch(console.error);
+    }
+  }, [repeatMode, setRepeatMode, deviceId, accessToken]);
+
   const upNext = queue.filter(t => t.id !== currentTrack?.id);
 
   return (
@@ -39,8 +93,45 @@ export function PlaybackControls() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
     >
-      {/* Transport buttons */}
+      {/* Progress / Seek bar */}
+      <div className={styles.seekRow}>
+        <span className={styles.seekTime}>{formatMs(playbackPositionMs)}</span>
+        <div className={styles.seekTrackWrapper}>
+          <div className={styles.seekTrack}>
+            <div
+              className={styles.seekFill}
+              style={{ width: `${progress * 100}%`, background: col }}
+            />
+          </div>
+          <input
+            type="range"
+            id="seek-bar"
+            className={styles.seekInput}
+            min={0}
+            max={1}
+            step={0.001}
+            value={progress}
+            onChange={handleSeek}
+            aria-label="Seek"
+          />
+        </div>
+        <span className={styles.seekTime}>{formatMs(duration)}</span>
+      </div>
+
+      {/* Transport + Shuffle/Repeat */}
       <div className={styles.transport}>
+        {/* Shuffle */}
+        <motion.button
+          id="shuffle-btn"
+          className={`${styles.modeBtn} ${shuffle ? styles.modeBtnActive : ''}`}
+          onClick={handleShuffle}
+          whileTap={{ scale: 0.88 }}
+          title={shuffle ? 'Shuffle on' : 'Shuffle off'}
+          style={shuffle ? { color: col } : {}}
+        >
+          <Shuffle size={16} />
+        </motion.button>
+
         <motion.button
           id="playback-prev-btn"
           className={styles.controlBtn}
@@ -59,10 +150,11 @@ export function PlaybackControls() {
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           aria-label={isPlaying ? 'Pause' : 'Play'}
+          style={{ background: `linear-gradient(135deg, ${col}, var(--cyan))` }}
           animate={{
             boxShadow: isPlaying
-              ? ['0 0 0px rgba(139,92,246,0)', '0 0 24px rgba(139,92,246,0.5)', '0 0 0px rgba(139,92,246,0)']
-              : '0 0 0px rgba(139,92,246,0)',
+              ? [`0 0 0px ${col}00`, `0 0 28px ${col}88`, `0 0 0px ${col}00`]
+              : `0 0 0px ${col}00`,
           }}
           transition={isPlaying ? { duration: 2, repeat: Infinity } : {}}
         >
@@ -88,6 +180,18 @@ export function PlaybackControls() {
           aria-label="Next track"
         >
           <SkipForward size={20} />
+        </motion.button>
+
+        {/* Repeat */}
+        <motion.button
+          id="repeat-btn"
+          className={`${styles.modeBtn} ${repeatMode !== 'off' ? styles.modeBtnActive : ''}`}
+          onClick={handleRepeat}
+          whileTap={{ scale: 0.88 }}
+          title={repeatMode === 'off' ? 'Repeat off' : repeatMode === 'track' ? 'Repeat track' : 'Repeat all'}
+          style={repeatMode !== 'off' ? { color: col } : {}}
+        >
+          {repeatMode === 'track' ? <Repeat1 size={16} /> : <Repeat size={16} />}
         </motion.button>
       </div>
 
@@ -147,32 +251,22 @@ export function PlaybackControls() {
                 transition={{ delay: i * 0.03 }}
               >
                 <span className={styles.queuePos}>{i + 1}</span>
-
                 <div className={styles.queueThumb}>
                   {track.album.images[0] ? (
-                    <Image
-                      src={track.album.images[0].url}
-                      alt={track.album.name}
-                      fill
-                      sizes="32px"
-                      className={styles.queueThumbImg}
-                    />
+                    <Image src={track.album.images[0].url} alt={track.album.name} fill sizes="32px" className={styles.queueThumbImg} />
                   ) : (
                     <Music2 size={12} />
                   )}
                 </div>
-
                 <div className={styles.queueInfo}>
                   <span className={styles.queueName}>{track.name}</span>
                   <span className={styles.queueArtist}>{track.artists.map(a => a.name).join(', ')}</span>
                 </div>
-
                 {track.duration_ms > 0 && (
                   <span className={styles.queueDur}>{formatMs(track.duration_ms)}</span>
                 )}
               </motion.div>
             ))}
-
             {upNext.length > 10 && (
               <p className={styles.queueMore}>+{upNext.length - 10} more songs</p>
             )}

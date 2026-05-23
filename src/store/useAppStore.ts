@@ -2,6 +2,22 @@ import { create } from 'zustand';
 import type { SpotifyTrack } from '@/lib/spotify';
 import type { MoodObject } from '@/lib/groq';
 
+export interface SpotifyAudioFeatures {
+  id: string;
+  tempo: number;           // BPM
+  valence: number;         // 0–1 happiness
+  energy: number;          // 0–1
+  danceability: number;    // 0–1
+  acousticness: number;    // 0–1
+  instrumentalness: number;
+  speechiness: number;
+  loudness: number;        // dB
+  key: number;             // 0–11 (C=0)
+  mode: number;            // 0=minor, 1=major
+  time_signature: number;
+  duration_ms: number;
+}
+
 export type ListeningState = 'idle' | 'wake_word' | 'listening' | 'processing' | 'playing';
 
 export interface ConversationEntry {
@@ -83,6 +99,18 @@ export interface AppState {
   ttsEnabled: boolean;
   setTtsEnabled: (v: boolean) => void;
 
+  // Player modes
+  shuffle: boolean;
+  setShuffle: (v: boolean) => void;
+  repeatMode: 'off' | 'track' | 'context';
+  setRepeatMode: (v: 'off' | 'track' | 'context') => void;
+
+  // Audio intelligence
+  audioFeatures: SpotifyAudioFeatures | null;
+  setAudioFeatures: (f: SpotifyAudioFeatures | null) => void;
+  dominantColor: string | null;
+  setDominantColor: (c: string | null) => void;
+
   // History
   songHistory: PlayedEntry[];
   addToSongHistory: (entry: PlayedEntry) => void;
@@ -148,6 +176,18 @@ export const useAppStore = create<AppState>((set) => ({
   setWakeWordThreshold: (v) => set({ wakeWordThreshold: v }),
   ttsEnabled: true,
   setTtsEnabled: (v) => set({ ttsEnabled: v }),
+
+  // Player modes
+  shuffle: false,
+  setShuffle: (v) => set({ shuffle: v }),
+  repeatMode: 'off',
+  setRepeatMode: (v) => set({ repeatMode: v }),
+
+  // Audio intelligence
+  audioFeatures: null,
+  setAudioFeatures: (f) => set({ audioFeatures: f }),
+  dominantColor: null,
+  setDominantColor: (c) => set({ dominantColor: c }),
 
   // History
   songHistory: [],

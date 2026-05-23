@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Music2 } from 'lucide-react';
 
 export function NowPlaying() {
-  const { currentTrack, isPlaying, playlistName, currentMood } = useAppStore();
+  const { currentTrack, isPlaying, playlistName, currentMood, dominantColor } = useAppStore();
 
   return (
     <AnimatePresence mode="wait">
@@ -18,6 +18,10 @@ export function NowPlaying() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -20, scale: 0.95 }}
           transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+          style={dominantColor ? {
+            borderColor: `${dominantColor}33`,
+            background: `radial-gradient(ellipse at top, ${dominantColor}18 0%, transparent 70%)`,
+          } : {}}
         >
           {/* Album art */}
           <div className={styles.artWrapper}>
