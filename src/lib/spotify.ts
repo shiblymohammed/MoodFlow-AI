@@ -44,7 +44,8 @@ function sanitizeQuery(query: string): string {
 export async function searchTracks(
   query: string,
   token: string,
-  limit = 20
+  limit = 20,
+  randomOffset = 0,
 ): Promise<SpotifyTrack[]> {
   const cleanQuery = sanitizeQuery(query);
   const params = new URLSearchParams({
@@ -52,6 +53,7 @@ export async function searchTracks(
     type: 'track',
     limit: String(Math.min(limit, 50)),
     market: 'IN', // improves results for Indian language requests
+    offset: String(randomOffset),
   });
   const data = await spotifyFetch(`/search?${params}`, token);
   return data.tracks?.items ?? [];

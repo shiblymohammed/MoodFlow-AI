@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const { mood }: { mood: MoodObject } = await request.json();
 
     const [searchResults, recommendations] = await Promise.allSettled([
-      searchTracks(mood.query_string, token, 15),
+      searchTracks(mood.query_string, token, 15, Math.floor(Math.random() * 3) * 5), // random offset: 0, 5, or 10
       getRecommendations(mood, token, 20),
     ]);
 

@@ -110,7 +110,7 @@ export function useMoodFlow() {
     });
 
     try {
-      // Direct Spotify search — no Groq needed
+      // 1. Direct Spotify search — find the exact song
       const res = await fetch(`/api/spotify/search-track?q=${encodeURIComponent(query)}`);
       if (!res.ok) throw new Error('Track search failed');
 
@@ -119,15 +119,24 @@ export function useMoodFlow() {
         addConversationEntry({
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `🔍 Couldn’t find “${query}” on Spotify. Try a different name?`,
+          content: `🔍 Couldn't find "${query}" on Spotify. Try a different name?`,
           timestamp: Date.now(),
         });
         setListeningState('idle');
         return;
       }
 
-      // Play just this one track
-      setQueue([track]);
+      // 2. Also fetch more by same artist to fill the queue after
+      const artistName = track.artists[0]?.name ?? '';
+      const similarRes = await fetch(
+        `/api/spotify/search-track?q=${encodeURIComponent(`${artistName} top songs`)}&limit=8`
+      ).then(r => r.ok ? r.json() : { track: null }).catch(() => ({ track: null }));
+
+      // Build queue: requested song first, then similar (excluding duplicates)
+      const similarTracks: SpotifyTrack[] = similarRes.tracks ?? [];
+      const fullQueue = [track, ...similarTracks.filter(t => t.id !== track.id)].slice(0, 10);
+
+      setQueue(fullQueue);
       const { deviceId } = useAppStore.getState();
       const playRes = await fetch('/api/spotify/playback', {
         method: 'POST',
@@ -135,7 +144,7 @@ export function useMoodFlow() {
         body: JSON.stringify({
           action: 'queue',
           deviceId: deviceId ?? undefined,
-          trackUris: [track.uri],
+          trackUris: fullQueue.map(t => t.uri),
         }),
       });
 
@@ -147,9 +156,9 @@ export function useMoodFlow() {
       addConversationEntry({
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: `▶️ Now playing **${track.name}** by ${track.artists.map(a => a.name).join(', ')}`,
+        content: `▶️ Now playing **${track.name}** by ${track.artists.map(a => a.name).join(', ')} · ${fullQueue.length} songs queued`,
         timestamp: Date.now(),
-        tracks: [track],
+        tracks: fullQueue.slice(0, 5),
       });
       speak(`Now playing ${track.name} by ${track.artists.map(a => a.name).join(', ')}`);
       setListeningState('playing');
@@ -157,7 +166,7 @@ export function useMoodFlow() {
       setError(err instanceof Error ? err.message : 'Could not play that song');
       setListeningState('idle');
     }
-  }, [setListeningState, setError, setQueue, addConversationEntry]);
+  }, [setListeningState, setError, setQueue, addConversationEntry, speak]);
 
   // ── Full mood pipeline (search + play) ────────────────────────────────────
   const runPipeline = useCallback(async (userInput: string) => {

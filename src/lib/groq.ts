@@ -31,7 +31,9 @@ Examples:
 - "aggressive gym music" → query_string: "energetic metal workout", genres: ["metal", "hip-hop"], playlist_name: "💪 Beast Mode"
 - "sad Tamil melodies" → query_string: "tamil sad songs melody", genres: ["kollywood", "indian pop"], seed_artists: ["AR Rahman", "Yuvan Shankar Raja"], playlist_name: "💔 Tamil Heartbreak"
 - "play some Malayalam songs" → query_string: "malayalam songs hits", genres: ["mollywood", "indian pop"], seed_artists: ["KS Chithra", "Vineeth Sreenivasan"], playlist_name: "🎵 Malayalam Magic"
-- "focus music for coding" → query_string: "lo-fi chill study beats", genres: ["lo-fi", "ambient"], playlist_name: "🧠 Deep Focus"`;
+- "focus music for coding" → query_string: "lo-fi chill study beats", genres: ["lo-fi", "ambient"], playlist_name: "🧠 Deep Focus"
+
+CRITICAL: Never repeat the same query_string you used before in this conversation. Always vary seed_artists and keywords for variety even if the mood is similar.`;
 
 export interface MoodObject {
   mood: string;
@@ -54,13 +56,14 @@ export async function extractMood(
   conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
   contextPrefix = ''    // injected by useContextSignals
 ): Promise<MoodObject> {
-  // Prepend context so the LLM understands time/weather/device without user saying it
+  // Add a random variety seed so repeated requests give different results
+  const varietySeed = Math.floor(Math.random() * 1000);
   const enrichedInput = contextPrefix
-    ? `[Context: ${contextPrefix}]\n\nUser says: ${userInput}`
-    : userInput;
+    ? `[Context: ${contextPrefix}] [variety_seed: ${varietySeed}]\n\nUser says: ${userInput}`
+    : `[variety_seed: ${varietySeed}] ${userInput}`;
 
   const messages: Groq.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: MOOD_SYSTEM_PROMPT },
+    { role: 'system', content: MOOD_SYSTEM_PROMPT + '\n\nCRITICAL: Never repeat the same query_string you used before in this conversation. Always vary seed_artists and keywords for variety even if the mood is similar.' },
     ...conversationHistory.map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
@@ -71,7 +74,7 @@ export async function extractMood(
   const completion = await groqClient.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages,
-    temperature: 0.7,
+    temperature: 0.9,   // raised from 0.7 — more variety in results
     max_tokens: 500,
     response_format: { type: 'json_object' },
   });

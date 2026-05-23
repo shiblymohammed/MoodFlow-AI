@@ -51,12 +51,12 @@ const VOLUME_DOWN_PATTERNS = [/\b(quieter|softer|volume down|turn (it |the volum
 
 /**
  * Specific song/artist patterns — "play X by Y", "put on X", "I want to hear X"
- * We capture the query part (everything after the trigger word)
+ * Optionally strips 'song/track/the song/the track' prefix from the query.
  */
-const SPECIFIC_SONG_TRIGGERS = /^(play|put on|i want to (hear|listen to)|can you play|please play|queue)\s+(.+)$/i;
+const SPECIFIC_SONG_TRIGGERS = /^(play|put on|i want to (hear|listen to)|can you play|please play|queue)\s+(?:(?:the\s+)?(?:song|track)\s+)?(.+)$/i;
 
-// If the phrase starts with "play" but also has mood words, treat as mood_request
-const MOOD_WORDS = /\b(something|some|music|songs?|vibe|mood|playlist|genre|type|style|feel)\b/i;
+// MOOD_WORDS — if query is ONLY mood descriptors (not a song name), treat as mood_request
+const MOOD_WORDS = /^(something|some|more|music|songs?|vibes?|mood|playlist|genre|type|style|feel)(\s+(else|different|good|happy|sad|chill|upbeat))?$/i;
 
 const MOOD_CHANGE_PATTERNS = [
   /\b(change (the )?(mood|vibe|music|playlist|song))\b/i,
@@ -122,7 +122,8 @@ export function classifyIntent(transcript: string): VoiceIntent {
   const songMatch = t.match(SPECIFIC_SONG_TRIGGERS);
   if (songMatch) {
     const query = songMatch[3].trim();
-    if (!MOOD_WORDS.test(query) && query.split(' ').length <= 8) {
+    // Only reject if the query is PURELY a mood descriptor (no actual song name)
+    if (!MOOD_WORDS.test(query) && query.split(' ').length <= 10) {
       return { type: 'specific_song', query };
     }
   }
