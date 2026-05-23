@@ -45,6 +45,8 @@ export interface AppState {
   setPlaylistName: (name: string) => void;
   detectedEmotion: { emotion: string; confidence: number; pitch_hz: number; energy_rms: number } | null;
   setDetectedEmotion: (e: { emotion: string; confidence: number; pitch_hz: number; energy_rms: number } | null) => void;
+  playbackPositionMs: number;
+  setPlaybackPositionMs: (ms: number) => void;
 
   // Conversation
   conversation: ConversationEntry[];
@@ -98,6 +100,8 @@ export const useAppStore = create<AppState>((set) => ({
   setPlaylistName: (name) => set({ playlistName: name }),
   detectedEmotion: null,
   setDetectedEmotion: (e) => set({ detectedEmotion: e }),
+  playbackPositionMs: 0,
+  setPlaybackPositionMs: (ms) => set({ playbackPositionMs: ms }),
 
   // Conversation
   conversation: [],

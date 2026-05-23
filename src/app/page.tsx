@@ -15,7 +15,9 @@ import styles from './page.module.css';
 import { SettingsPanel } from '@/components/Settings/SettingsPanel';
 import { FaceDetector } from '@/components/FaceDetector/FaceDetector';
 import { VibeRoulette } from '@/components/VibeRoulette/VibeRoulette';
-import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings } from 'lucide-react';
+import { Lyrics } from '@/components/Lyrics/Lyrics';
+import { useBiometrics } from '@/hooks/useBiometrics';
+import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings, Heart } from 'lucide-react';
 
 type MobileTab = 'voice' | 'player' | 'chat';
 
@@ -83,6 +85,7 @@ export default function HomePage() {
 
   useSpotifyPlayer();
   const { weatherData } = useContextSignals();
+  const { state: hrState, data: hrData, isSupported: btSupported, connect: connectHR } = useBiometrics(runPipeline);
 
   const { isConnected: wakeWordConnected, pauseMic, resumeMic } = useWakeWord(
     async (emotion) => {
@@ -158,6 +161,27 @@ export default function HomePage() {
               {wakeWordConnected ? 'Hey Jarvis' : 'Offline'}
             </span>
           </div>
+
+          {/* Heart rate pill — only when connected */}
+          {hrState === 'connected' && hrData && (
+            <div className={styles.pill} title={`Heart rate: ${hrData.bpm} BPM — ${hrData.mood}`}>
+              <Heart size={11} style={{ color: 'var(--rose)' }} />
+              <span className={styles.pillText}>{hrData.bpm} BPM {hrData.emoji}</span>
+            </div>
+          )}
+
+          {/* Bluetooth connect pill — when supported but idle */}
+          {btSupported && hrState === 'idle' && (
+            <button
+              className={styles.pill}
+              onClick={connectHR}
+              title="Connect heart rate monitor"
+              style={{ cursor: 'pointer' }}
+            >
+              <Heart size={11} />
+              <span className={styles.pillText}>HR</span>
+            </button>
+          )}
 
           {/* Emotion pill — only when detected */}
           {detectedEmotion && detectedEmotion.emotion !== 'neutral' && (
@@ -282,6 +306,7 @@ export default function HomePage() {
         >
           <NowPlaying />
           <PlaybackControls />
+          <Lyrics />
           <ConversationFeed />
         </motion.section>
       </div>

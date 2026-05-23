@@ -31,6 +31,7 @@ interface SpotifyPlayer {
 
 interface SpotifyPlayerState {
   paused: boolean;
+  position: number;           // ms from track start
   track_window: {
     current_track: {
       id: string;
@@ -55,6 +56,7 @@ export function useSpotifyPlayer() {
     setDeviceId,
     setCurrentTrack,
     setIsPlaying,
+    setPlaybackPositionMs,
     setError,
     volume,
   } = useAppStore();
@@ -94,6 +96,7 @@ export function useSpotifyPlayer() {
       const s = state as SpotifyPlayerState | null;
       if (!s) return;
       setIsPlaying(!s.paused);
+      setPlaybackPositionMs(s.position);
       const ct = s.track_window.current_track;
       setCurrentTrack({
         id: ct.id,
@@ -143,7 +146,17 @@ export function useSpotifyPlayer() {
     });
 
     playerRef.current = player;
-  }, [volume, setDeviceId, setCurrentTrack, setIsPlaying, setError]);
+
+    // Poll position every second to keep lyrics in sync
+    const posInterval = setInterval(async () => {
+      const s = await player.getCurrentState();
+      if (s && !s.paused) {
+        setPlaybackPositionMs((s as unknown as SpotifyPlayerState).position);
+      }
+    }, 1000);
+
+    return () => clearInterval(posInterval);
+  }, [volume, setDeviceId, setCurrentTrack, setIsPlaying, setPlaybackPositionMs, setError]);
 
   useEffect(() => {
     if (!accessToken) return;
