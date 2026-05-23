@@ -27,7 +27,7 @@ except Exception:
 
 # ── Config ───────────────────────────────────────────────────────────────────
 HOST               = "0.0.0.0"
-PORT               = 8765
+PORT               = 8766
 WAKE_WORD_MODEL    = "hey_jarvis"
 DETECTION_THRESHOLD = 0.5
 COOLDOWN_SECONDS   = 3.0
