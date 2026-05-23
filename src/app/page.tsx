@@ -13,6 +13,7 @@ import { ConversationFeed } from '@/components/ConversationFeed/ConversationFeed
 import { SpotifyLogin } from '@/components/SpotifyLogin/SpotifyLogin';
 import styles from './page.module.css';
 import { SettingsPanel } from '@/components/Settings/SettingsPanel';
+import { FaceDetector } from '@/components/FaceDetector/FaceDetector';
 import { AlertCircle, X, LogOut, Radio, Mic, Music2, MessageCircle, Languages, Settings } from 'lucide-react';
 
 type MobileTab = 'voice' | 'player' | 'chat';
@@ -262,6 +263,9 @@ export default function HomePage() {
               </motion.button>
             ))}
           </div>
+
+          {/* Face mood detection */}
+          <FaceDetector onMoodDetected={runPipeline} />
         </motion.section>
 
         {/* Right: Player + Chat */}
@@ -306,6 +310,9 @@ export default function HomePage() {
                   </motion.button>
                 ))}
               </div>
+
+              {/* Face mood detection */}
+              <FaceDetector onMoodDetected={runPipeline} />
             </motion.div>
           )}
 
